@@ -12,7 +12,6 @@ import (
 	"github.com/opencode-ai/opencode/internal/config"
 	"github.com/opencode-ai/opencode/internal/llm/agent"
 	"github.com/opencode-ai/opencode/internal/logging"
-	"github.com/opencode-ai/opencode/internal/lsp/protocol"
 	"github.com/opencode-ai/opencode/internal/permission"
 	"github.com/opencode-ai/opencode/internal/pubsub"
 	"github.com/opencode-ai/opencode/internal/session"
@@ -392,8 +391,8 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dialog.ShowLSPSetupMsg:
 		a.showLSPSetupDialog = msg.Show
 		if a.showLSPSetupDialog {
-			// Initialize the LSP setup wizard
-			a.lspSetupDialog = dialog.NewLSPSetupWizard(context.Background())
+			// Initialize the LSP setup wizard with the app's LSP setup service
+			a.lspSetupDialog = dialog.NewLSPSetupWizard(context.Background(), a.app.LSPSetup)
 			a.lspSetupDialog.SetSize(a.width, a.height)
 			return a, a.lspSetupDialog.Init()
 		}
@@ -402,29 +401,12 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case dialog.CloseLSPSetupMsg:
 		a.showLSPSetupDialog = false
 		if msg.Configure && len(msg.Servers) > 0 {
-			// Convert setup.LSPServerInfo to config.LSPServerInfo
-			configServers := make(map[protocol.LanguageKind]config.LSPServerInfo)
-			for lang, server := range msg.Servers {
-				configServers[lang] = config.LSPServerInfo{
-					Name:        server.Name,
-					Command:     server.Command,
-					Args:        server.Args,
-					InstallCmd:  server.InstallCmd,
-					Description: server.Description,
-					Recommended: server.Recommended,
-					Options:     server.Options,
-				}
-			}
-
-			// Update the LSP configuration
-			err := config.UpdateLSPConfig(configServers)
+			// Use the app's ConfigureLSP method to handle the configuration
+			err := a.app.ConfigureLSP(context.Background(), msg.Servers)
 			if err != nil {
 				logging.Error("Failed to update LSP configuration", "error", err)
 				return a, util.ReportError(err)
 			}
-
-			// Restart LSP clients
-			go a.app.InitLSPClients(context.Background())
 
 			return a, util.ReportInfo("LSP configuration updated successfully")
 		}

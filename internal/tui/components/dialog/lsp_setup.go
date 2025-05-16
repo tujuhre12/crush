@@ -3,7 +3,6 @@ package dialog
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"sort"
 	"strings"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/opencode-ai/opencode/internal/config"
 	"github.com/opencode-ai/opencode/internal/lsp/protocol"
 	"github.com/opencode-ai/opencode/internal/lsp/setup"
+	"github.com/opencode-ai/opencode/internal/pubsub"
 	utilComponents "github.com/opencode-ai/opencode/internal/tui/components/util"
 	"github.com/opencode-ai/opencode/internal/tui/styles"
 	"github.com/opencode-ai/opencode/internal/tui/theme"
@@ -52,6 +52,7 @@ type LSPSetupWizard struct {
 	keys           lspSetupKeyMap
 	error          string
 	program        *tea.Program
+	setupService   setup.Service
 }
 
 // LSPItem represents an item in the language or server list
@@ -99,7 +100,7 @@ func (i LSPItem) Render(selected bool, width int) string {
 }
 
 // NewLSPSetupWizard creates a new LSPSetupWizard
-func NewLSPSetupWizard(ctx context.Context) *LSPSetupWizard {
+func NewLSPSetupWizard(ctx context.Context, setupService setup.Service) *LSPSetupWizard {
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("205"))
@@ -113,6 +114,7 @@ func NewLSPSetupWizard(ctx context.Context) *LSPSetupWizard {
 		installOutput:  make([]string, 0, 10), // Initialize with capacity for 10 lines
 		spinner:        s,
 		keys:           DefaultLSPSetupKeyMap(),
+		setupService:   setupService,
 	}
 }
 
@@ -181,18 +183,18 @@ func (m *LSPSetupWizard) Init() tea.Cmd {
 
 // detectLanguages is a command that detects languages in the workspace
 func (m *LSPSetupWizard) detectLanguages() tea.Msg {
-	languages, err := setup.DetectProjectLanguages(config.WorkingDirectory())
+	languages, err := m.setupService.DetectLanguages(m.ctx, config.WorkingDirectory())
 	if err != nil {
 		return lspSetupErrorMsg{err: err}
 	}
 
-	isMonorepo, projectDirs := setup.DetectMonorepo(config.WorkingDirectory())
+	isMonorepo, projectDirs := m.setupService.DetectMonorepo(m.ctx, config.WorkingDirectory())
 
-	primaryLangs := setup.GetPrimaryLanguages(languages, 10)
+	primaryLangs := m.setupService.GetPrimaryLanguages(languages, 10)
 
-	availableLSPs := setup.DiscoverInstalledLSPs()
+	availableLSPs := m.setupService.DiscoverInstalledLSPs(m.ctx)
 
-	recommendedLSPs := setup.GetRecommendedLSPServers(primaryLangs)
+	recommendedLSPs := m.setupService.GetRecommendedLSPServers(m.ctx, primaryLangs)
 	for lang, servers := range recommendedLSPs {
 		if _, ok := availableLSPs[lang]; !ok {
 			availableLSPs[lang] = servers
@@ -299,6 +301,18 @@ func (m *LSPSetupWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case lspSetupErrorMsg:
 		m.error = msg.err.Error()
+		m.installing = false
+
+		// If we're in the installation step, stay there to show the error
+		if m.step == StepInstallation {
+			m.step = StepInstallation
+		}
+		m.installing = false
+
+		// If we're in the installation step, stay there to show the error
+		if m.step == StepInstallation {
+			m.step = StepInstallation
+		}
 		return m, nil
 
 	case lspSetupInstallMsg:
@@ -316,14 +330,68 @@ func (m *LSPSetupWizard) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addOutputLine(fmt.Sprintf("✗ Failed to install %s for %s", msg.result.ServerName, msg.language))
 		}
 
-		m.installing = false
+		// Continue with the next installation
+		if len(m.installResults) < len(m.selectedLSPs) {
+			return m, tea.Batch(
+				m.spinner.Tick,
+				m.installNextServer(),
+			)
+		}
 
-		if len(m.installResults) == len(m.selectedLSPs) {
-			// All installations are complete, move to the summary step
-			m.step = StepInstallation
-		} else {
-			// Continue with the next installation
-			return m, m.installNextServer()
+		// All installations are complete
+		m.installing = false
+		m.step = StepInstallation
+		return m, nil
+
+	case lspSetupInstallDoneMsg:
+		m.installing = false
+		m.step = StepInstallation
+		return m, nil
+
+	case pubsub.Event[setup.LSPSetupEvent]:
+		// Handle LSP setup events
+		event := msg.Payload
+		switch event.Type {
+		case setup.EventLanguageDetected:
+			// Language detected, update UI if needed
+			m.addOutputLine(fmt.Sprintf("Detected language: %s", event.Language))
+		case setup.EventServerDiscovered:
+			// Server discovered, update UI if needed
+			m.addOutputLine(fmt.Sprintf("Discovered server: %s for %s", event.ServerName, event.Language))
+		case setup.EventServerInstalled:
+			// Server installed, update the installation results
+			if _, ok := m.installResults[event.Language]; !ok {
+				m.installResults[event.Language] = setup.InstallationResult{
+					ServerName: event.ServerName,
+					Success:    event.Success,
+					Error:      event.Error,
+					Output:     event.Description,
+				}
+				m.addOutputLine(fmt.Sprintf("✓ Successfully installed %s for %s", event.ServerName, event.Language))
+			}
+		case setup.EventServerInstallFailed:
+			// Server installation failed, update the installation results
+			if _, ok := m.installResults[event.Language]; !ok {
+				m.installResults[event.Language] = setup.InstallationResult{
+					ServerName: event.ServerName,
+					Success:    false,
+					Error:      event.Error,
+					Output:     event.Description,
+				}
+				m.addOutputLine(fmt.Sprintf("✗ Failed to install %s for %s: %s",
+					event.ServerName, event.Language, event.Error))
+			}
+		case setup.EventSetupCompleted:
+			// Setup completed, update UI if needed
+			if event.Success {
+				m.addOutputLine("LSP setup completed successfully")
+				// If we're in the installation step and all servers are installed, we can move to the next step
+				if m.installing && len(m.installResults) == len(m.selectedLSPs) {
+					m.installing = false
+				}
+			} else {
+				m.addOutputLine(fmt.Sprintf("LSP setup failed: %s", event.Error))
+			}
 		}
 	}
 
@@ -401,6 +469,10 @@ func (m *LSPSetupWizard) handleEnter() (tea.Model, tea.Cmd) {
 		// Start installation
 		m.step = StepInstallation
 		m.installing = true
+		m.installResults = make(map[protocol.LanguageKind]setup.InstallationResult)
+		m.installOutput = []string{} // Clear previous output
+		m.addOutputLine("Starting LSP server installation...")
+
 		// Start the spinner and begin installation
 		return m, tea.Batch(
 			m.spinner.Tick,
@@ -592,6 +664,7 @@ func (m *LSPSetupWizard) renderConfirmation(baseStyle lipgloss.Style, t theme.Th
 }
 
 // renderInstallation renders the installation/summary step
+// renderInstallation renders the installation/summary step
 func (m *LSPSetupWizard) renderInstallation(baseStyle lipgloss.Style, t theme.Theme, maxWidth int) string {
 	if m.installing {
 		// Show installation progress with proper styling
@@ -601,7 +674,48 @@ func (m *LSPSetupWizard) renderInstallation(baseStyle lipgloss.Style, t theme.Th
 			Width(maxWidth).
 			Padding(1, 1)
 
-		spinnerText := m.spinner.View() + " Installing " + m.currentInstall + "..."
+		// Show progress for all servers
+		var progressLines []string
+
+		// Get languages in a sorted order for consistent display
+		var languages []protocol.LanguageKind
+		for lang := range m.selectedLSPs {
+			languages = append(languages, lang)
+		}
+
+		// Sort languages alphabetically
+		sort.Slice(languages, func(i, j int) bool {
+			return string(languages[i]) < string(languages[j])
+		})
+
+		for _, lang := range languages {
+			server := m.selectedLSPs[lang]
+			status := "⋯" // Pending
+			statusColor := t.TextMuted()
+
+			if result, ok := m.installResults[lang]; ok {
+				if result.Success {
+					status = "✓" // Success
+					statusColor = t.Success()
+				} else {
+					status = "✗" // Failed
+					statusColor = t.Error()
+				}
+			} else if m.currentInstall == fmt.Sprintf("%s for %s", server.Name, lang) {
+				status = m.spinner.View() // In progress
+				statusColor = t.Primary()
+			}
+
+			line := fmt.Sprintf("%s %s: %s",
+				baseStyle.Foreground(statusColor).Render(status),
+				lang,
+				server.Name)
+
+			progressLines = append(progressLines, line)
+		}
+
+		progressText := strings.Join(progressLines, "\n")
+		progressContent := spinnerStyle.Render(progressText)
 
 		// Show output if available
 		var content string
@@ -617,11 +731,11 @@ func (m *LSPSetupWizard) renderInstallation(baseStyle lipgloss.Style, t theme.Th
 
 			content = lipgloss.JoinVertical(
 				lipgloss.Left,
-				spinnerStyle.Render(spinnerText),
+				progressContent,
 				outputContent,
 			)
 		} else {
-			content = spinnerStyle.Render(spinnerText)
+			content = progressContent
 		}
 
 		return content
@@ -821,57 +935,47 @@ func (m *LSPSetupWizard) installNextServer() tea.Cmd {
 	return func() tea.Msg {
 		for lang, server := range m.selectedLSPs {
 			if _, ok := m.installResults[lang]; !ok {
-				if _, err := exec.LookPath(server.Command); err == nil {
+				if m.setupService.VerifyInstallation(m.ctx, server.Command) {
 					// Server is already installed
 					output := fmt.Sprintf("%s is already installed", server.Name)
-					m.installResults[lang] = setup.InstallationResult{
-						ServerName: server.Name,
-						Success:    true,
-						Output:     output,
+					return lspSetupInstallMsg{
+						language: lang,
+						result: setup.InstallationResult{
+							ServerName: server.Name,
+							Success:    true,
+							Output:     output,
+						},
+						output: output,
 					}
-
-					// Add output line
-					m.addOutputLine(output)
-
-					// Continue with next server immediately
-					return m.installNextServer()()
 				}
 
 				// Install this server
 				m.installing = true
 				m.currentInstall = fmt.Sprintf("%s for %s", server.Name, lang)
-
-				// Add initial output line
 				m.addOutputLine(fmt.Sprintf("Installing %s for %s...", server.Name, lang))
 
-				// Create a channel to receive the installation result
-				resultCh := make(chan setup.InstallationResult)
-
-				go func(l protocol.LanguageKind, s setup.LSPServerInfo) {
-					result := setup.InstallLSPServer(m.ctx, s)
-					resultCh <- result
-				}(lang, server)
-
-				// Return a command that will wait for the installation to complete
-				// and also keep the spinner updating
-				return tea.Batch(
-					m.spinner.Tick,
-					func() tea.Msg {
-						result := <-resultCh
-						return lspSetupInstallMsg{
-							language: lang,
-							result:   result,
-							output:   result.Output,
-						}
-					},
-				)
+				// Return a command that will perform the installation
+				return installServerCmd(m.ctx, lang, server, m.setupService)
 			}
 		}
 
 		// All servers have been installed
-		m.installing = false
-		m.step = StepInstallation
-		return nil
+		return lspSetupInstallDoneMsg{}
+	}
+}
+
+// installServerCmd creates a command that installs an LSP server
+func installServerCmd(ctx context.Context, lang protocol.LanguageKind, server setup.LSPServerInfo, setupService setup.Service) tea.Cmd {
+	return func() tea.Msg {
+		// Perform installation using the service
+		result := setupService.InstallLSPServer(ctx, server)
+
+		// Return result as a message
+		return lspSetupInstallMsg{
+			language: lang,
+			result:   result,
+			output:   result.Output,
+		}
 	}
 }
 
@@ -931,6 +1035,9 @@ type lspSetupInstallMsg struct {
 	result   setup.InstallationResult
 	output   string // Installation output
 }
+
+// lspSetupInstallDoneMsg is sent when all installations are complete
+type lspSetupInstallDoneMsg struct{}
 
 // CloseLSPSetupMsg is a message that is sent when the LSP setup wizard is closed
 type CloseLSPSetupMsg struct {

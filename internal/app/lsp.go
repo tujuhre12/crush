@@ -7,6 +7,8 @@ import (
 	"github.com/opencode-ai/opencode/internal/config"
 	"github.com/opencode-ai/opencode/internal/logging"
 	"github.com/opencode-ai/opencode/internal/lsp"
+	"github.com/opencode-ai/opencode/internal/lsp/protocol"
+	"github.com/opencode-ai/opencode/internal/lsp/setup"
 	"github.com/opencode-ai/opencode/internal/lsp/watcher"
 )
 
@@ -32,6 +34,22 @@ func (app *App) CheckAndSetupLSP(ctx context.Context) bool {
 	
 	logging.Info("LSP not configured, setup needed")
 	return true
+}
+
+// ConfigureLSP configures LSP with the provided servers
+func (app *App) ConfigureLSP(ctx context.Context, servers map[protocol.LanguageKind]setup.LSPServerInfo) error {
+	// Save the configuration using the LSP setup service
+	err := app.LSPSetup.SaveConfiguration(ctx, servers)
+	if err != nil {
+		logging.Error("Failed to save LSP configuration", err)
+		return err
+	}
+	
+	// Initialize LSP clients with the new configuration
+	app.InitLSPClients(ctx)
+	
+	logging.Info("LSP configuration updated successfully")
+	return nil
 }
 
 // createAndStartLSPClient creates a new LSP client, initializes it, and starts its workspace watcher
