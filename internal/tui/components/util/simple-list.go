@@ -97,7 +97,11 @@ func (c *simpleListCmp[T]) GetSelectedItem() (T, int) {
 }
 
 func (c *simpleListCmp[T]) SetItems(items []T) {
-	c.selectedIdx = 0
+	// Preserve the selected index when updating items
+	// Only reset to 0 if the list is empty or the index is out of bounds
+	if len(items) == 0 || c.selectedIdx >= len(items) {
+		c.selectedIdx = 0
+	}
 	c.items = items
 }
 

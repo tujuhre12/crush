@@ -563,6 +563,29 @@ func (a *agent) Summarize(ctx context.Context, sessionID string) error {
 			a.Publish(pubsub.CreatedEvent, event)
 			return
 		}
+		session, err := a.sessions.Get(summarizeCtx, sessionID)
+		if err != nil {
+			event = AgentEvent{
+				Type:  AgentEventTypeError,
+				Error: fmt.Errorf("failed to get session: %w", err),
+				Done:  true,
+			}
+			a.Publish(pubsub.CreatedEvent, event)
+			return
+		}
+		if session.SummaryMessageID != "" {
+			summaryMsgInex := -1
+			for i, msg := range msgs {
+				if msg.ID == session.SummaryMessageID {
+					summaryMsgInex = i
+					break
+				}
+			}
+			if summaryMsgInex != -1 {
+				msgs = msgs[summaryMsgInex:]
+				msgs[0].Role = message.User
+			}
+		}
 
 		event = AgentEvent{
 			Type:     AgentEventTypeSummarize,

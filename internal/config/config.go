@@ -62,10 +62,10 @@ type Data struct {
 
 // LSPConfig defines configuration for Language Server Protocol integration.
 type LSPConfig struct {
-	Disabled bool     `json:"enabled"`
+	Disabled bool     `json:"disabled"`
 	Command  string   `json:"command"`
-	Args     []string `json:"args"`
-	Options  any      `json:"options"`
+	Args     []string `json:"args,omitempty"`
+	Options  any      `json:"options,omitempty"`
 }
 
 // TUIConfig defines the configuration for the Terminal User Interface.
@@ -91,7 +91,7 @@ type Config struct {
 	DebugLSP     bool                              `json:"debugLSP,omitempty"`
 	ContextPaths []string                          `json:"contextPaths,omitempty"`
 	TUI          TUIConfig                         `json:"tui"`
-	Shell        ShellConfig                       `json:"shell,omitempty"`
+	Shell        ShellConfig                       `json:"shell"`
 	AutoCompact  bool                              `json:"autoCompact,omitempty"`
 }
 

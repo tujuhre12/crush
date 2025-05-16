@@ -13,20 +13,31 @@ import (
 func (app *App) initLSPClients(ctx context.Context) {
 	cfg := config.Get()
 
-	// Initialize LSP clients
 	for name, clientConfig := range cfg.LSP {
-		// Start each client initialization in its own goroutine
+		if clientConfig.Disabled {
+			logging.Info("Skipping disabled LSP client", "name", name)
+			continue
+		}
+		
 		go app.createAndStartLSPClient(ctx, name, clientConfig.Command, clientConfig.Args...)
 	}
 	logging.Info("LSP clients initialization started in background")
 }
 
+// CheckAndSetupLSP checks if LSP is configured and returns true if setup is needed
+func (app *App) CheckAndSetupLSP(ctx context.Context) bool {
+	if config.IsLSPConfigured() {
+		return false
+	}
+	
+	logging.Info("LSP not configured, setup needed")
+	return true
+}
+
 // createAndStartLSPClient creates a new LSP client, initializes it, and starts its workspace watcher
 func (app *App) createAndStartLSPClient(ctx context.Context, name string, command string, args ...string) {
-	// Create a specific context for initialization with a timeout
 	logging.Info("Creating LSP client", "name", name, "command", command, "args", args)
 	
-	// Create the LSP client
 	lspClient, err := lsp.NewClient(ctx, command, args...)
 	if err != nil {
 		logging.Error("Failed to create LSP client for", name, err)
@@ -37,11 +48,9 @@ func (app *App) createAndStartLSPClient(ctx context.Context, name string, comman
 	initCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	
-	// Initialize with the initialization context
 	_, err = lspClient.InitializeLSPClient(initCtx, config.WorkingDirectory())
 	if err != nil {
 		logging.Error("Initialize failed", "name", name, "error", err)
-		// Clean up the client to prevent resource leaks
 		lspClient.Close()
 		return
 	}

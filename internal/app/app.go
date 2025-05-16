@@ -32,6 +32,9 @@ type App struct {
 
 	LSPClients map[string]*lsp.Client
 
+	// InitLSPClients initializes LSP clients from the configuration
+	InitLSPClients func(context.Context)
+
 	clientsMutex sync.RWMutex
 
 	watcherCancelFuncs []context.CancelFunc
@@ -52,6 +55,9 @@ func New(ctx context.Context, conn *sql.DB) (*App, error) {
 		Permissions: permission.NewPermissionService(),
 		LSPClients:  make(map[string]*lsp.Client),
 	}
+
+	// Set the InitLSPClients function
+	app.InitLSPClients = app.initLSPClients
 
 	// Initialize theme based on configuration
 	app.initTheme()

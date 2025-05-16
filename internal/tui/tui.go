@@ -12,6 +12,7 @@ import (
 	"github.com/opencode-ai/opencode/internal/config"
 	"github.com/opencode-ai/opencode/internal/llm/agent"
 	"github.com/opencode-ai/opencode/internal/logging"
+	"github.com/opencode-ai/opencode/internal/lsp/protocol"
 	"github.com/opencode-ai/opencode/internal/permission"
 	"github.com/opencode-ai/opencode/internal/pubsub"
 	"github.com/opencode-ai/opencode/internal/session"
@@ -136,6 +137,9 @@ type appModel struct {
 	showMultiArgumentsDialog bool
 	multiArgumentsDialog     dialog.MultiArgumentsDialogCmp
 
+	showLSPSetupDialog bool
+	lspSetupDialog     *dialog.LSPSetupWizard
+
 	isCompacting      bool
 	compactingMessage string
 }
@@ -176,6 +180,12 @@ func (a appModel) Init() tea.Cmd {
 		return dialog.ShowInitDialogMsg{Show: shouldShow}
 	})
 
+	// Check if we should show the LSP setup dialog
+	cmds = append(cmds, func() tea.Msg {
+		shouldShow := a.app.CheckAndSetupLSP(context.Background())
+		return dialog.ShowLSPSetupMsg{Show: shouldShow}
+	})
+
 	return tea.Batch(cmds...)
 }
 
@@ -213,6 +223,15 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, filepickerCmd)
 
 		a.initDialog.SetSize(msg.Width, msg.Height)
+
+		if a.showLSPSetupDialog && a.lspSetupDialog != nil {
+			a.lspSetupDialog.SetSize(msg.Width, msg.Height)
+			lsp, lspCmd := a.lspSetupDialog.Update(msg)
+			if lsp, ok := lsp.(*dialog.LSPSetupWizard); ok {
+				a.lspSetupDialog = lsp
+			}
+			cmds = append(cmds, lspCmd)
+		}
 
 		if a.showMultiArgumentsDialog {
 			a.multiArgumentsDialog.SetSize(msg.Width, msg.Height)
@@ -370,6 +389,47 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.showInitDialog = msg.Show
 		return a, nil
 
+	case dialog.ShowLSPSetupMsg:
+		a.showLSPSetupDialog = msg.Show
+		if a.showLSPSetupDialog {
+			// Initialize the LSP setup wizard
+			a.lspSetupDialog = dialog.NewLSPSetupWizard(context.Background())
+			a.lspSetupDialog.SetSize(a.width, a.height)
+			return a, a.lspSetupDialog.Init()
+		}
+		return a, nil
+
+	case dialog.CloseLSPSetupMsg:
+		a.showLSPSetupDialog = false
+		if msg.Configure && len(msg.Servers) > 0 {
+			// Convert setup.LSPServerInfo to config.LSPServerInfo
+			configServers := make(map[protocol.LanguageKind]config.LSPServerInfo)
+			for lang, server := range msg.Servers {
+				configServers[lang] = config.LSPServerInfo{
+					Name:        server.Name,
+					Command:     server.Command,
+					Args:        server.Args,
+					InstallCmd:  server.InstallCmd,
+					Description: server.Description,
+					Recommended: server.Recommended,
+					Options:     server.Options,
+				}
+			}
+
+			// Update the LSP configuration
+			err := config.UpdateLSPConfig(configServers)
+			if err != nil {
+				logging.Error("Failed to update LSP configuration", "error", err)
+				return a, util.ReportError(err)
+			}
+
+			// Restart LSP clients
+			go a.app.InitLSPClients(context.Background())
+
+			return a, util.ReportInfo("LSP configuration updated successfully")
+		}
+		return a, nil
+
 	case dialog.CloseInitDialogMsg:
 		a.showInitDialog = false
 		if msg.Initialize {
@@ -427,7 +487,7 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If submitted, replace all named arguments and run the command
 		if msg.Submit {
 			content := msg.Content
-			
+
 			// Replace each named argument with its value
 			for name, value := range msg.Args {
 				placeholder := "$" + name
@@ -443,6 +503,15 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case tea.KeyMsg:
+		// If LSP setup dialog is open, let it handle the key press
+		if a.showLSPSetupDialog && a.lspSetupDialog != nil {
+			lsp, cmd := a.lspSetupDialog.Update(msg)
+			if lsp, ok := lsp.(*dialog.LSPSetupWizard); ok {
+				a.lspSetupDialog = lsp
+			}
+			return a, cmd
+		}
+
 		// If multi-arguments dialog is open, let it handle the key press first
 		if a.showMultiArgumentsDialog {
 			args, cmd := a.multiArgumentsDialog.Update(msg)
@@ -472,6 +541,9 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if a.showMultiArgumentsDialog {
 				a.showMultiArgumentsDialog = false
+			}
+			if a.showLSPSetupDialog {
+				a.showLSPSetupDialog = false
 			}
 			return a, nil
 		case key.Matches(msg, keys.SwitchSession):
@@ -656,6 +728,12 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if a.showLSPSetupDialog {
+		d, lspCmd := a.lspSetupDialog.Update(msg)
+		a.lspSetupDialog = d.(*dialog.LSPSetupWizard)
+		cmds = append(cmds, lspCmd)
+	}
+
 	s, _ := a.status.Update(msg)
 	a.status = s.(core.StatusCmp)
 	a.pages[a.currentPage], cmd = a.pages[a.currentPage].Update(msg)
@@ -666,15 +744,6 @@ func (a appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // RegisterCommand adds a command to the command dialog
 func (a *appModel) RegisterCommand(cmd dialog.Command) {
 	a.commands = append(a.commands, cmd)
-}
-
-func (a *appModel) findCommand(id string) (dialog.Command, bool) {
-	for _, cmd := range a.commands {
-		if cmd.ID == id {
-			return cmd, true
-		}
-	}
-	return dialog.Command{}, false
 }
 
 func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
@@ -865,6 +934,17 @@ func (a appModel) View() string {
 		)
 	}
 
+	if a.showLSPSetupDialog && a.lspSetupDialog != nil {
+		overlay := a.lspSetupDialog.View()
+		appView = layout.PlaceOverlay(
+			a.width/2-lipgloss.Width(overlay)/2,
+			a.height/2-lipgloss.Height(overlay)/2,
+			overlay,
+			appView,
+			true,
+		)
+	}
+
 	if a.showThemeDialog {
 		overlay := a.themeDialog.View()
 		row := lipgloss.Height(appView) / 2
@@ -948,6 +1028,17 @@ If there are Cursor rules (in .cursor/rules/ or .cursorrules) or Copilot rules (
 		Handler: func(cmd dialog.Command) tea.Cmd {
 			return func() tea.Msg {
 				return startCompactSessionMsg{}
+			}
+		},
+	})
+
+	model.RegisterCommand(dialog.Command{
+		ID:          "setup-lsp",
+		Title:       "Setup LSP",
+		Description: "Configure Language Server Protocol integration",
+		Handler: func(cmd dialog.Command) tea.Cmd {
+			return func() tea.Msg {
+				return dialog.ShowLSPSetupMsg{Show: true}
 			}
 		},
 	})
