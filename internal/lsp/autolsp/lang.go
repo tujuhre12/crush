@@ -14,6 +14,7 @@ const (
 	Ruby
 	Rust
 	TypeScript
+	YAML
 )
 
 var langNames = map[Lang]string{
@@ -28,6 +29,7 @@ var langNames = map[Lang]string{
 	Ruby:       "Ruby",
 	Rust:       "Rust",
 	TypeScript: "TypeScript",
+	YAML:       "YAML",
 }
 
 func (l Lang) String() string {

@@ -15,7 +15,7 @@ func TestDetector(t *testing.T) {
 		expected []autolsp.Lang
 		file     string
 	}{
-		{"Dart", []autolsp.Lang{autolsp.Dart}, "pubspec.yaml"},
+		{"Dart", []autolsp.Lang{autolsp.Dart, autolsp.YAML}, "pubspec.yaml"},
 		{"Elixir", []autolsp.Lang{autolsp.Elixir}, "mix.exs"},
 		{"Go", []autolsp.Lang{autolsp.Go}, "go.mod"},
 		{"Java-Gradle", []autolsp.Lang{autolsp.Java}, "build.gradle"},
@@ -27,6 +27,8 @@ func TestDetector(t *testing.T) {
 		{"Python-SetupPy", []autolsp.Lang{autolsp.Python}, "setup.py"},
 		{"Ruby", []autolsp.Lang{autolsp.Ruby}, "Gemfile"},
 		{"Rust", []autolsp.Lang{autolsp.Rust}, "Cargo.toml"},
+		{"YAML-yaml", []autolsp.Lang{autolsp.YAML}, "config.yaml"},
+		{"YAML-yml", []autolsp.Lang{autolsp.YAML}, "config.yml"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -68,8 +70,8 @@ func TestDetectorMultiple(t *testing.T) {
 		autolsp.WithFS(afero.NewIOFS(fs)),
 	)
 	expected := []autolsp.Lang{
-		autolsp.Ruby,
 		autolsp.JavaScript,
+		autolsp.Ruby,
 	}
 	langs := d.Detect()
 
@@ -105,6 +107,7 @@ func TestDetectorThisProject(t *testing.T) {
 	)
 	expected := []autolsp.Lang{
 		autolsp.Go,
+		autolsp.YAML,
 	}
 	langs := d.Detect()
 

@@ -50,6 +50,7 @@ var detectPatterns = map[Lang][]string{
 	Ruby:       {"Gemfile"},
 	Rust:       {"Cargo.toml"},
 	TypeScript: {},
+	YAML:       {"*.yaml", "*.yml"},
 }
 
 func (d *Detector) Detect() (langs []Lang) {
@@ -61,12 +62,15 @@ func (d *Detector) Detect() (langs []Lang) {
 			return filepath.SkipDir
 		}
 		for lang, patterns := range detectPatterns {
-			if slices.Contains(patterns, e.Name()) {
-				langs = append(langs, lang)
-				break
+			for _, pattern := range patterns {
+				if match, _ := filepath.Match(pattern, e.Name()); match {
+					langs = append(langs, lang)
+					break
+				}
 			}
 		}
 		return nil
 	})
+	slices.Sort(langs)
 	return slice.Uniq(langs)
 }
