@@ -39,17 +39,22 @@ func WithDir(dir string) DetectorOption {
 }
 
 var detectPatterns = map[Lang][]string{
+	Bash:       {},
 	C:          {},
+	CSharp:     {},
 	Dart:       {"pubspec.yaml"},
+	Docker:     {},
 	Elixir:     {"mix.exs"},
 	Go:         {"go.mod"},
 	Java:       {"build.gradle", "pom.xml"},
 	JavaScript: {"package.json"},
+	Lua:        {},
 	PHP:        {"composer.json"},
 	Python:     {"pyproject.toml", "requirements.txt", "setup.py"},
 	Ruby:       {"Gemfile"},
 	Rust:       {"Cargo.toml"},
 	TypeScript: {},
+	Vue:        {"*.vue"},
 	YAML:       {"*.yaml", "*.yml"},
 }
 
