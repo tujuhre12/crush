@@ -7,14 +7,14 @@ import (
 	"slices"
 )
 
-type Detector struct {
+type LangDetector struct {
 	fs fs.FS
 }
 
-type DetectorOption func(d *Detector)
+type LangDetectorOption func(d *LangDetector)
 
-func New(options ...DetectorOption) *Detector {
-	d := Detector{}
+func NewLangDetector(options ...LangDetectorOption) *LangDetector {
+	d := LangDetector{}
 	for _, opt := range options {
 		opt(&d)
 	}
@@ -24,19 +24,19 @@ func New(options ...DetectorOption) *Detector {
 	return &d
 }
 
-func WithFS(fs fs.FS) DetectorOption {
-	return func(d *Detector) {
+func LangDetectorWithFS(fs fs.FS) LangDetectorOption {
+	return func(d *LangDetector) {
 		d.fs = fs
 	}
 }
 
-func WithDir(dir string) DetectorOption {
-	return func(d *Detector) {
+func LangDetectorWithDir(dir string) LangDetectorOption {
+	return func(d *LangDetector) {
 		d.fs = os.DirFS(dir)
 	}
 }
 
-func (d *Detector) Detect() []Lang {
+func (d *LangDetector) Detect() []Lang {
 	priorities := make(map[string]int)
 
 	_ = fs.WalkDir(d.fs, ".", func(path string, e fs.DirEntry, err error) error {

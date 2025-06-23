@@ -38,8 +38,8 @@ func TestDetector(t *testing.T) {
 				_ = f.Close()
 			}
 
-			d := autolsp.New(
-				autolsp.WithFS(afero.NewIOFS(fs)),
+			d := autolsp.NewLangDetector(
+				autolsp.LangDetectorWithFS(afero.NewIOFS(fs)),
 			)
 			langs := d.Detect()
 
@@ -66,8 +66,8 @@ func TestDetectorMultiple(t *testing.T) {
 		_ = f.Close()
 	}
 
-	d := autolsp.New(
-		autolsp.WithFS(afero.NewIOFS(fs)),
+	d := autolsp.NewLangDetector(
+		autolsp.LangDetectorWithFS(afero.NewIOFS(fs)),
 	)
 	expected := []string{"javascript", "ruby", "json"}
 	langs := d.Detect()
@@ -87,8 +87,8 @@ func TestDetectorIgnoredDir(t *testing.T) {
 		_ = f.Close()
 	}
 
-	d := autolsp.New(
-		autolsp.WithFS(afero.NewIOFS(fs)),
+	d := autolsp.NewLangDetector(
+		autolsp.LangDetectorWithFS(afero.NewIOFS(fs)),
 	)
 	expected := []string{}
 	langs := d.Detect()
@@ -99,8 +99,8 @@ func TestDetectorIgnoredDir(t *testing.T) {
 }
 
 func TestDetectorThisProject(t *testing.T) {
-	d := autolsp.New(
-		autolsp.WithFS(os.DirFS("../../..")),
+	d := autolsp.NewLangDetector(
+		autolsp.LangDetectorWithFS(os.DirFS("../../..")),
 	)
 	expected := []string{
 		"go",
