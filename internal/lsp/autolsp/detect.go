@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-
-	"github.com/charmbracelet/x/exp/slice"
 )
 
 type Detector struct {
@@ -38,27 +36,9 @@ func WithDir(dir string) DetectorOption {
 	}
 }
 
-var detectPatterns = map[Lang][]string{
-	Bash:       {},
-	C:          {},
-	CSharp:     {},
-	Dart:       {"pubspec.yaml"},
-	Docker:     {},
-	Elixir:     {"mix.exs"},
-	Go:         {"go.mod"},
-	Java:       {"build.gradle", "pom.xml"},
-	JavaScript: {"package.json"},
-	Lua:        {},
-	PHP:        {"composer.json"},
-	Python:     {"pyproject.toml", "requirements.txt", "setup.py"},
-	Ruby:       {"Gemfile"},
-	Rust:       {"Cargo.toml"},
-	TypeScript: {},
-	Vue:        {"*.vue"},
-	YAML:       {"*.yaml", "*.yml"},
-}
+func (d *Detector) Detect() []Lang {
+	priorities := make(map[string]int)
 
-func (d *Detector) Detect() (langs []Lang) {
 	_ = fs.WalkDir(d.fs, ".", func(path string, e fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -66,16 +46,31 @@ func (d *Detector) Detect() (langs []Lang) {
 		if _, ok := dirsToIgnore[e.Name()]; ok {
 			return filepath.SkipDir
 		}
-		for lang, patterns := range detectPatterns {
-			for _, pattern := range patterns {
+		for _, lang := range Langs {
+			for _, pattern := range lang.WorkspacePatterns {
 				if match, _ := filepath.Match(pattern, e.Name()); match {
-					langs = append(langs, lang)
+					priorities[lang.Name] += 10
+					break
+				}
+			}
+			for _, pattern := range lang.FilePatterns {
+				if match, _ := filepath.Match(pattern, e.Name()); match {
+					priorities[lang.Name] += 1
 					break
 				}
 			}
 		}
 		return nil
 	})
-	slices.Sort(langs)
-	return slice.Uniq(langs)
+
+	var langs []Lang
+	for _, lang := range Langs {
+		if priorities[lang.Name] > 0 {
+			langs = append(langs, lang)
+		}
+	}
+	slices.SortFunc(langs, func(a, b Lang) int {
+		return priorities[b.Name] - priorities[a.Name]
+	})
+	return langs
 }
