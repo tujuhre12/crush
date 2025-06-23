@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -83,8 +85,8 @@ to assist developers in writing, debugging, and understanding code directly from
 			return err
 		}
 
-		// Create main context for the application
-		ctx, cancel := context.WithCancel(context.Background())
+		// Create main context for the application with signal handling
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer cancel()
 
 		app, err := app.New(ctx, conn)
