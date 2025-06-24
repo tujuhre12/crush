@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/afero"
 )
 
-func TestDetector(t *testing.T) {
+func TestLangDetector(t *testing.T) {
 	tests := []struct {
 		name     string
 		expected []string
@@ -50,7 +50,7 @@ func TestDetector(t *testing.T) {
 	}
 }
 
-func TestDetectorMultiple(t *testing.T) {
+func TestLangDetectorMultiple(t *testing.T) {
 	fs := afero.NewMemMapFs()
 
 	//nolint:gofumpt
@@ -77,7 +77,7 @@ func TestDetectorMultiple(t *testing.T) {
 	}
 }
 
-func TestDetectorIgnoredDir(t *testing.T) {
+func TestLangDetectorIgnoredDir(t *testing.T) {
 	fs := afero.NewMemMapFs()
 
 	//nolint:gofumpt
@@ -98,7 +98,7 @@ func TestDetectorIgnoredDir(t *testing.T) {
 	}
 }
 
-func TestDetectorThisProject(t *testing.T) {
+func TestLangDetectorThisProject(t *testing.T) {
 	d := autolsp.NewLangDetector(
 		autolsp.LangDetectorWithFS(os.DirFS("../../..")),
 	)
