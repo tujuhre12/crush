@@ -47,3 +47,63 @@ func TestServerDetectorNotInstalled(t *testing.T) {
 		t.Errorf("expected gopls to be in the list of servers to be installed, got %v", toBeInstalled)
 	}
 }
+
+func TestServerDetectorPriorityOrderInstalled(t *testing.T) {
+	// Mock function that returns all Python servers as installed
+	lookPathFunc := func(name string) (string, error) {
+		if name == "jedi-language-server" || name == "pylsp" || name == "pyright" {
+			return "/usr/local/bin/" + name, nil
+		}
+		return "", os.ErrNotExist
+	}
+
+	// Test with python first - should prioritize python servers in order they appear in Servers slice
+	d := autolsp.NewServerDetector(
+		autolsp.ServerDetectorWithLangs("python", "go"),
+		autolsp.ServerDetectorWithLookPathFunc(lookPathFunc),
+	)
+	installed, _ := d.Detect()
+
+	if len(installed) != 3 {
+		t.Errorf("expected 3 python servers to be installed, got %d", len(installed))
+	}
+
+	// Verify they are in the order they appear in the Servers slice (jedi-language-server, pylsp, pyright)
+	expectedOrder := []string{"jedi-language-server", "pylsp", "pyright"}
+	for i, server := range installed {
+		if server.Name != expectedOrder[i] {
+			t.Errorf("expected server at index %d to be %s, got %s", i, expectedOrder[i], server.Name)
+		}
+	}
+}
+
+func TestServerDetectorPriorityOrderToBeInstalled(t *testing.T) {
+	// Mock function that returns no servers as installed
+	lookPathFunc := func(name string) (string, error) {
+		return "", os.ErrNotExist
+	}
+
+	// Test with multiple languages - go should come first, then python servers
+	d := autolsp.NewServerDetector(
+		autolsp.ServerDetectorWithLangs("go", "python"),
+		autolsp.ServerDetectorWithLookPathFunc(lookPathFunc),
+	)
+	_, toBeInstalled := d.Detect()
+
+	if len(toBeInstalled) != 4 {
+		t.Errorf("expected 4 servers to be installed (1 go + 3 python), got %d", len(toBeInstalled))
+	}
+
+	// First server should be gopls (go language comes first in langs slice)
+	if toBeInstalled[0].Name != "gopls" {
+		t.Errorf("expected first server to be gopls, got %s", toBeInstalled[0].Name)
+	}
+
+	// Remaining servers should be python servers in their original order
+	expectedPythonOrder := []string{"jedi-language-server", "pylsp", "pyright"}
+	for i, expectedName := range expectedPythonOrder {
+		if toBeInstalled[i+1].Name != expectedName {
+			t.Errorf("expected python server at index %d to be %s, got %s", i+1, expectedName, toBeInstalled[i+1].Name)
+		}
+	}
+}
