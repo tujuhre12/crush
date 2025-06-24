@@ -1,5 +1,6 @@
 package autolsp
 
+// ServerName represents a language server name.
 type ServerName string
 
 const (
@@ -28,6 +29,7 @@ const (
 	ServerYAMLLanguageServer       ServerName = "yaml-language-server"
 )
 
+// Server represents a language server with its configuration.
 type Server struct {
 	Name           ServerName
 	Args           []string
@@ -37,6 +39,7 @@ type Server struct {
 	Priority       int // lower number means higher priority
 }
 
+// Servers contains all supported language servers with their configurations.
 var Servers = []Server{
 	{
 		Name:           ServerBashLanguageServer,

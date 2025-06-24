@@ -11,13 +11,16 @@ import (
 // want to override the default behavior of looking for executables in the PATH.
 type LookPathFunc func(string) (string, error)
 
+// ServerDetector detects available language servers for given languages.
 type ServerDetector struct {
 	langs        []LangName
 	lookPathFunc LookPathFunc
 }
 
+// ServerDetectorOption configures a ServerDetector.
 type ServerDetectorOption func(d *ServerDetector)
 
+// NewServerDetector creates a new server detector with the given options.
 func NewServerDetector(options ...ServerDetectorOption) *ServerDetector {
 	d := ServerDetector{}
 	for _, opt := range options {
@@ -29,12 +32,14 @@ func NewServerDetector(options ...ServerDetectorOption) *ServerDetector {
 	return &d
 }
 
+// ServerDetectorWithLangs configures the detector to check servers for specific languages.
 func ServerDetectorWithLangs(langs ...LangName) ServerDetectorOption {
 	return func(d *ServerDetector) {
 		d.langs = langs
 	}
 }
 
+// ServerDetectorWithLookPathFunc configures the detector to use a custom path lookup function.
 func ServerDetectorWithLookPathFunc(lookPathFunc LookPathFunc) ServerDetectorOption {
 	return func(d *ServerDetector) {
 		d.lookPathFunc = lookPathFunc
@@ -60,6 +65,7 @@ func (d *ServerDetector) Detect() (installed, toBeInstalled []Server) {
 	return
 }
 
+// sortByPriority sorts servers by language priority and server priority.
 func (d *ServerDetector) sortByPriority(servers []Server) {
 	slices.SortStableFunc(servers, func(a, b Server) int {
 		var (

@@ -1,5 +1,6 @@
 package autolsp
 
+// LangName represents a programming language name.
 type LangName string
 
 const (
@@ -26,12 +27,14 @@ const (
 	LangYAML       LangName = "yaml"
 )
 
+// Lang represents a programming language with its detection patterns.
 type Lang struct {
 	Name              LangName
 	WorkspacePatterns []string
 	FilePatterns      []string
 }
 
+// Langs contains all supported languages with their detection patterns.
 var Langs = []Lang{
 	{
 		Name:              LangBash,

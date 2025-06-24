@@ -7,12 +7,15 @@ import (
 	"slices"
 )
 
+// LangDetector detects programming languages in a workspace dir.
 type LangDetector struct {
 	fs fs.FS
 }
 
+// LangDetectorOption configures a LangDetector.
 type LangDetectorOption func(d *LangDetector)
 
+// NewLangDetector creates a new language detector with the given options.
 func NewLangDetector(options ...LangDetectorOption) *LangDetector {
 	d := LangDetector{}
 	for _, opt := range options {
@@ -24,18 +27,21 @@ func NewLangDetector(options ...LangDetectorOption) *LangDetector {
 	return &d
 }
 
+// LangDetectorWithFS configures the detector to use a specific filesystem.
 func LangDetectorWithFS(fs fs.FS) LangDetectorOption {
 	return func(d *LangDetector) {
 		d.fs = fs
 	}
 }
 
+// LangDetectorWithDir configures the detector to use a specific directory.
 func LangDetectorWithDir(dir string) LangDetectorOption {
 	return func(d *LangDetector) {
 		d.fs = os.DirFS(dir)
 	}
 }
 
+// Detect scans the filesystem and returns detected languages sorted by priority.
 func (d *LangDetector) Detect() []Lang {
 	priorities := make(map[LangName]int)
 
