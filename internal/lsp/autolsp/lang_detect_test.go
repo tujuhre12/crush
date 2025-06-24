@@ -2,11 +2,12 @@ package autolsp_test
 
 import (
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 
+	"github.com/caarlos0/testfs"
 	"github.com/charmbracelet/crush/internal/lsp/autolsp"
-	"github.com/spf13/afero"
 )
 
 func TestLangDetector(t *testing.T) {
@@ -32,14 +33,12 @@ func TestLangDetector(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fs := afero.NewMemMapFs()
-			{
-				f, _ := fs.Create(tt.file)
-				_ = f.Close()
-			}
+			tmpfs := testfs.New(t)
+			_ = tmpfs.MkdirAll(filepath.Dir(tt.file), 0o755)
+			_ = tmpfs.WriteFile(tt.file, []byte(""), 0o644)
 
 			d := autolsp.NewLangDetector(
-				autolsp.LangDetectorWithFS(afero.NewIOFS(fs)),
+				autolsp.LangDetectorWithFS(tmpfs),
 			)
 			langs := d.Detect()
 
@@ -51,23 +50,19 @@ func TestLangDetector(t *testing.T) {
 }
 
 func TestLangDetectorMultiple(t *testing.T) {
-	fs := afero.NewMemMapFs()
+	tmpfs := testfs.New(t)
 
-	//nolint:gofumpt
 	{
-		_ = fs.Mkdir("backend", 0755)
-		f, _ := fs.Create("backend/Gemfile")
-		_ = f.Close()
+		_ = tmpfs.MkdirAll("backend", 0o755)
+		_ = tmpfs.WriteFile("backend/Gemfile", []byte(""), 0o644)
 	}
-	//nolint:gofumpt
 	{
-		_ = fs.Mkdir("frontend", 0755)
-		f, _ := fs.Create("frontend/package.json")
-		_ = f.Close()
+		_ = tmpfs.MkdirAll("frontend", 0o755)
+		_ = tmpfs.WriteFile("frontend/package.json", []byte(""), 0o644)
 	}
 
 	d := autolsp.NewLangDetector(
-		autolsp.LangDetectorWithFS(afero.NewIOFS(fs)),
+		autolsp.LangDetectorWithFS(tmpfs),
 	)
 	expected := []string{"javascript", "ruby", "json"}
 	langs := d.Detect()
@@ -78,17 +73,15 @@ func TestLangDetectorMultiple(t *testing.T) {
 }
 
 func TestLangDetectorIgnoredDir(t *testing.T) {
-	fs := afero.NewMemMapFs()
+	tmpfs := testfs.New(t)
 
-	//nolint:gofumpt
 	{
-		_ = fs.Mkdir("node_modules", 0755)
-		f, _ := fs.Create("node_modules/package.json")
-		_ = f.Close()
+		_ = tmpfs.MkdirAll("node_modules", 0o755)
+		_ = tmpfs.WriteFile("node_modules/package.json", []byte(""), 0o644)
 	}
 
 	d := autolsp.NewLangDetector(
-		autolsp.LangDetectorWithFS(afero.NewIOFS(fs)),
+		autolsp.LangDetectorWithFS(tmpfs),
 	)
 	expected := []string{}
 	langs := d.Detect()
