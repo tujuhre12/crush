@@ -111,7 +111,7 @@ func TestLangDetectorThisProject(t *testing.T) {
 func collectNames(langs []autolsp.Lang) []string {
 	names := make([]string, len(langs))
 	for i, lang := range langs {
-		names[i] = lang.Name
+		names[i] = string(lang.Name)
 	}
 	return names
 }

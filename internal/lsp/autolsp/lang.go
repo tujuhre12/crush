@@ -1,114 +1,140 @@
 package autolsp
 
+type LangName string
+
+const (
+	LangBash       LangName = "bash"
+	LangC          LangName = "c"
+	LangCSS        LangName = "css"
+	LangCSharp     LangName = "csharp"
+	LangDart       LangName = "dart"
+	LangDocker     LangName = "docker"
+	LangElixir     LangName = "elixir"
+	LangGo         LangName = "go"
+	LangHTML       LangName = "html"
+	LangJSON       LangName = "json"
+	LangJava       LangName = "java"
+	LangJavaScript LangName = "javascript"
+	LangLua        LangName = "lua"
+	LangPHP        LangName = "php"
+	LangPython     LangName = "python"
+	LangRuby       LangName = "ruby"
+	LangRust       LangName = "rust"
+	LangSvelte     LangName = "svelte"
+	LangTypeScript LangName = "typescript"
+	LangVue        LangName = "vue"
+	LangYAML       LangName = "yaml"
+)
+
 type Lang struct {
-	Name              string
+	Name              LangName
 	WorkspacePatterns []string
 	FilePatterns      []string
 }
 
 var Langs = []Lang{
 	{
-		Name:              "bash",
+		Name:              LangBash,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.sh", "*.bash"},
 	},
 	{
-		Name:              "c",
+		Name:              LangC,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.c"},
 	},
 	{
-		Name:              "css",
+		Name:              LangCSS,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.css"},
 	},
 	{
-		Name:              "csharp",
+		Name:              LangCSharp,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.cs"},
 	},
 	{
-		Name:              "dart",
+		Name:              LangDart,
 		WorkspacePatterns: []string{"pubspec.yaml"},
 		FilePatterns:      []string{"*.dart"},
 	},
 	{
-		Name:              "docker",
+		Name:              LangDocker,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"Dockerfile"},
 	},
 	{
-		Name:              "elixir",
+		Name:              LangElixir,
 		WorkspacePatterns: []string{"mix.exs"},
 		FilePatterns:      []string{"*.ex", "*.exs"},
 	},
 	{
-		Name:              "go",
+		Name:              LangGo,
 		WorkspacePatterns: []string{"go.mod"},
 		FilePatterns:      []string{"*.go"},
 	},
 	{
-		Name:              "html",
+		Name:              LangHTML,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.html", "*.htm"},
 	},
 	{
-		Name:              "json",
+		Name:              LangJSON,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.json"},
 	},
 	{
-		Name:              "java",
+		Name:              LangJava,
 		WorkspacePatterns: []string{"build.gradle", "pom.xml"},
 		FilePatterns:      []string{"*.java"},
 	},
 	{
-		Name:              "javascript",
+		Name:              LangJavaScript,
 		WorkspacePatterns: []string{"package.json"},
 		FilePatterns:      []string{"*.js", "*.jsx", "*.mjs", "*.cjs"},
 	},
 	{
-		Name:              "lua",
+		Name:              LangLua,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.lua"},
 	},
 	{
-		Name:              "php",
+		Name:              LangPHP,
 		WorkspacePatterns: []string{"composer.json"},
 		FilePatterns:      []string{"*.php"},
 	},
 	{
-		Name:              "python",
+		Name:              LangPython,
 		WorkspacePatterns: []string{"pyproject.toml", "requirements.txt", "setup.py"},
 		FilePatterns:      []string{"*.py"},
 	},
 	{
-		Name:              "ruby",
+		Name:              LangRuby,
 		WorkspacePatterns: []string{"Gemfile", "*.gemspec"},
 		FilePatterns:      []string{"*.rb", "*.rake", "*.gemspec"},
 	},
 	{
-		Name:              "rust",
+		Name:              LangRust,
 		WorkspacePatterns: []string{"Cargo.toml"},
 		FilePatterns:      []string{"*.rs"},
 	},
 	{
-		Name:              "svelte",
+		Name:              LangSvelte,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.svelte"},
 	},
 	{
-		Name:              "typescript",
+		Name:              LangTypeScript,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.ts", "*.tsx"},
 	},
 	{
-		Name:              "vue",
+		Name:              LangVue,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.vue"},
 	},
 	{
-		Name:              "yaml",
+		Name:              LangYAML,
 		WorkspacePatterns: nil,
 		FilePatterns:      []string{"*.yaml", "*.yml"},
 	},

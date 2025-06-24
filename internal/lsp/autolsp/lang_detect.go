@@ -37,7 +37,7 @@ func LangDetectorWithDir(dir string) LangDetectorOption {
 }
 
 func (d *LangDetector) Detect() []Lang {
-	priorities := make(map[string]int)
+	priorities := make(map[LangName]int)
 
 	_ = fs.WalkDir(d.fs, ".", func(path string, e fs.DirEntry, err error) error {
 		if err != nil {

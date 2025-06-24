@@ -12,7 +12,7 @@ import (
 type LookPathFunc func(string) (string, error)
 
 type ServerDetector struct {
-	langs        []string
+	langs        []LangName
 	lookPathFunc LookPathFunc
 }
 
@@ -29,7 +29,7 @@ func NewServerDetector(options ...ServerDetectorOption) *ServerDetector {
 	return &d
 }
 
-func ServerDetectorWithLangs(langs ...string) ServerDetectorOption {
+func ServerDetectorWithLangs(langs ...LangName) ServerDetectorOption {
 	return func(d *ServerDetector) {
 		d.langs = langs
 	}
@@ -49,7 +49,7 @@ func (d *ServerDetector) Detect() (installed, toBeInstalled []Server) {
 		if !slice.ContainsAny(server.Langs, d.langs...) {
 			continue
 		}
-		if _, err := d.lookPathFunc(server.Name); err == nil {
+		if _, err := d.lookPathFunc(string(server.Name)); err == nil {
 			installed = append(installed, server)
 		} else {
 			toBeInstalled = append(toBeInstalled, server)

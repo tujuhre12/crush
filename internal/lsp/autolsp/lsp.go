@@ -1,167 +1,195 @@
 package autolsp
 
+type ServerName string
+
+const (
+	ServerBashLanguageServer       ServerName = "bash-language-server"
+	ServerClangd                   ServerName = "clangd"
+	ServerDart                     ServerName = "dart"
+	ServerDeno                     ServerName = "deno"
+	ServerDockerLangserver         ServerName = "docker-langserver"
+	ServerElixirLS                 ServerName = "elixir-ls"
+	ServerGopls                    ServerName = "gopls"
+	ServerIntelephense             ServerName = "intelephense"
+	ServerJDTLS                    ServerName = "jdtls"
+	ServerJediLanguageServer       ServerName = "jedi-language-server"
+	ServerLuaLanguageServer        ServerName = "lua-language-server"
+	ServerOmnisharp                ServerName = "omnisharp"
+	ServerPylsp                    ServerName = "pylsp"
+	ServerPyright                  ServerName = "pyright"
+	ServerRustAnalyzer             ServerName = "rust-analyzer"
+	ServerSolargraph               ServerName = "solargraph"
+	ServerSvelteserver             ServerName = "svelteserver"
+	ServerTypeScriptLanguageServer ServerName = "typescript-language-server"
+	ServerVSCodeCSSLanguageServer  ServerName = "vscode-css-language-server"
+	ServerVSCodeHTMLLanguageServer ServerName = "vscode-html-language-server"
+	ServerVSCodeJSONLanguageServer ServerName = "vscode-json-language-server"
+	ServerVLS                      ServerName = "vls"
+	ServerYAMLLanguageServer       ServerName = "yaml-language-server"
+)
+
 type Server struct {
-	Name           string
+	Name           ServerName
 	Args           []string
 	InstallCmd     string
 	InstallWebsite string
-	Langs          []string
+	Langs          []LangName
 }
 
 var Servers = []Server{
 	{
-		Name:           "bash-language-server",
+		Name:           ServerBashLanguageServer,
 		Args:           []string{"start"},
 		InstallCmd:     "npm install -g bash-language-server",
 		InstallWebsite: "",
-		Langs:          []string{"bash"},
+		Langs:          []LangName{LangBash},
 	},
 	{
-		Name:           "clangd",
+		Name:           ServerClangd,
 		InstallCmd:     "",
 		InstallWebsite: "https://clangd.llvm.org/installation.html",
-		Langs:          []string{"c"},
+		Langs:          []LangName{LangC},
 	},
 	{
-		Name:           "dart",
+		Name:           ServerDart,
 		Args:           []string{"language-server"},
 		InstallCmd:     "",
 		InstallWebsite: "https://dart.dev/get-dart",
-		Langs:          []string{"dart"},
+		Langs:          []LangName{LangDart},
 	},
 	{
-		Name:           "deno",
+		Name:           ServerDeno,
 		Args:           []string{"lsp"},
 		InstallCmd:     "",
 		InstallWebsite: "https://deno.com/#installation",
-		Langs:          []string{"javascript", "typescript"},
+		Langs:          []LangName{LangJavaScript, LangTypeScript},
 	},
 	{
-		Name:           "docker-langserver",
+		Name:           ServerDockerLangserver,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g dockerfile-language-server-nodejs",
 		InstallWebsite: "",
-		Langs:          []string{"docker"},
+		Langs:          []LangName{LangDocker},
 	},
 	{
-		Name:           "elixir-ls",
+		Name:           ServerElixirLS,
 		InstallCmd:     "",
 		InstallWebsite: "https://github.com/elixir-lsp/elixir-ls#installation",
-		Langs:          []string{"elixir"},
+		Langs:          []LangName{LangElixir},
 	},
 	{
-		Name:           "gopls",
+		Name:           ServerGopls,
 		InstallCmd:     "go install golang.org/x/tools/gopls@latest",
 		InstallWebsite: "",
-		Langs:          []string{"go"},
+		Langs:          []LangName{LangGo},
 	},
 	{
-		Name:           "intelephense",
+		Name:           ServerIntelephense,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g intelephense",
 		InstallWebsite: "",
-		Langs:          []string{"php"},
+		Langs:          []LangName{LangPHP},
 	},
 	{
-		Name:           "jdtls",
+		Name:           ServerJDTLS,
 		InstallCmd:     "",
 		InstallWebsite: "https://github.com/eclipse/eclipse.jdt.ls",
-		Langs:          []string{"java"},
+		Langs:          []LangName{LangJava},
 	},
 	{
-		Name:           "jedi-language-server",
+		Name:           ServerJediLanguageServer,
 		InstallCmd:     "pip install jedi-language-server",
 		InstallWebsite: "",
-		Langs:          []string{"python"},
+		Langs:          []LangName{LangPython},
 	},
 	{
-		Name:           "lua-language-server",
+		Name:           ServerLuaLanguageServer,
 		InstallCmd:     "",
 		InstallWebsite: "https://github.com/LuaLS/lua-language-server/wiki/Getting-Started",
-		Langs:          []string{"lua"},
+		Langs:          []LangName{LangLua},
 	},
 	{
-		Name:           "omnisharp",
+		Name:           ServerOmnisharp,
 		Args:           []string{"--languageserver"},
 		InstallCmd:     "npm install -g omnisharp-language-server",
 		InstallWebsite: "",
-		Langs:          []string{"csharp"},
+		Langs:          []LangName{LangCSharp},
 	},
 	{
-		Name:           "pylsp",
+		Name:           ServerPylsp,
 		Args:           []string{},
 		InstallCmd:     "pip install python-lsp-server",
 		InstallWebsite: "",
-		Langs:          []string{"python"},
+		Langs:          []LangName{LangPython},
 	},
 	{
-		Name:           "pyright",
+		Name:           ServerPyright,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g pyright",
 		InstallWebsite: "",
-		Langs:          []string{"python"},
+		Langs:          []LangName{LangPython},
 	},
 	{
-		Name:           "rust-analyzer",
+		Name:           ServerRustAnalyzer,
 		Args:           []string{},
 		InstallCmd:     "rustup component add rust-analyzer",
 		InstallWebsite: "",
-		Langs:          []string{"rust"},
+		Langs:          []LangName{LangRust},
 	},
 	{
-		Name:           "solargraph",
+		Name:           ServerSolargraph,
 		Args:           []string{"stdio"},
 		InstallCmd:     "gem install solargraph",
 		InstallWebsite: "",
-		Langs:          []string{"ruby"},
+		Langs:          []LangName{LangRuby},
 	},
 	{
-		Name:           "svelteserver",
+		Name:           ServerSvelteserver,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g svelte-language-server",
 		InstallWebsite: "",
-		Langs:          []string{"svelte"},
+		Langs:          []LangName{LangSvelte},
 	},
 	{
-		Name:           "typescript-language-server",
+		Name:           ServerTypeScriptLanguageServer,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g typescript-language-server typescript",
 		InstallWebsite: "",
-		Langs:          []string{"typescript"},
+		Langs:          []LangName{LangTypeScript},
 	},
 	{
-		Name:           "vscode-css-language-server",
+		Name:           ServerVSCodeCSSLanguageServer,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g vscode-langservers-extracted",
 		InstallWebsite: "",
-		Langs:          []string{"css"},
+		Langs:          []LangName{LangCSS},
 	},
 	{
-		Name:           "vscode-html-language-server",
+		Name:           ServerVSCodeHTMLLanguageServer,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g vscode-langservers-extracted",
 		InstallWebsite: "",
-		Langs:          []string{"html"},
+		Langs:          []LangName{LangHTML},
 	},
 	{
-		Name:           "vscode-json-language-server",
+		Name:           ServerVSCodeJSONLanguageServer,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g vscode-langservers-extracted",
 		InstallWebsite: "",
-		Langs:          []string{"json"},
+		Langs:          []LangName{LangJSON},
 	},
 	{
-		Name:           "vls",
+		Name:           ServerVLS,
 		Args:           []string{},
 		InstallCmd:     "npm install -g @volar/vue-language-server",
 		InstallWebsite: "",
-		Langs:          []string{"vue"},
+		Langs:          []LangName{LangVue},
 	},
 	{
-		Name:           "yaml-language-server",
+		Name:           ServerYAMLLanguageServer,
 		Args:           []string{"--stdio"},
 		InstallCmd:     "npm install -g yaml-language-server",
 		InstallWebsite: "",
-		Langs:          []string{"yaml"},
+		Langs:          []LangName{LangYAML},
 	},
 }
