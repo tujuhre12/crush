@@ -34,6 +34,7 @@ type Server struct {
 	InstallCmd     string
 	InstallWebsite string
 	Langs          []LangName
+	Priority       int // lower number means higher priority
 }
 
 var Servers = []Server{
@@ -43,12 +44,14 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g bash-language-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangBash},
+		Priority:       1,
 	},
 	{
 		Name:           ServerClangd,
 		InstallCmd:     "",
 		InstallWebsite: "https://clangd.llvm.org/installation.html",
 		Langs:          []LangName{LangC},
+		Priority:       1,
 	},
 	{
 		Name:           ServerDart,
@@ -56,6 +59,7 @@ var Servers = []Server{
 		InstallCmd:     "",
 		InstallWebsite: "https://dart.dev/get-dart",
 		Langs:          []LangName{LangDart},
+		Priority:       1,
 	},
 	{
 		Name:           ServerDeno,
@@ -63,6 +67,7 @@ var Servers = []Server{
 		InstallCmd:     "",
 		InstallWebsite: "https://deno.com/#installation",
 		Langs:          []LangName{LangJavaScript, LangTypeScript},
+		Priority:       2,
 	},
 	{
 		Name:           ServerDockerLangserver,
@@ -70,18 +75,21 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g dockerfile-language-server-nodejs",
 		InstallWebsite: "",
 		Langs:          []LangName{LangDocker},
+		Priority:       1,
 	},
 	{
 		Name:           ServerElixirLS,
 		InstallCmd:     "",
 		InstallWebsite: "https://github.com/elixir-lsp/elixir-ls#installation",
 		Langs:          []LangName{LangElixir},
+		Priority:       1,
 	},
 	{
 		Name:           ServerGopls,
 		InstallCmd:     "go install golang.org/x/tools/gopls@latest",
 		InstallWebsite: "",
 		Langs:          []LangName{LangGo},
+		Priority:       1,
 	},
 	{
 		Name:           ServerIntelephense,
@@ -89,24 +97,28 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g intelephense",
 		InstallWebsite: "",
 		Langs:          []LangName{LangPHP},
+		Priority:       1,
 	},
 	{
 		Name:           ServerJDTLS,
 		InstallCmd:     "",
 		InstallWebsite: "https://github.com/eclipse/eclipse.jdt.ls",
 		Langs:          []LangName{LangJava},
+		Priority:       1,
 	},
 	{
 		Name:           ServerJediLanguageServer,
 		InstallCmd:     "pip install jedi-language-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangPython},
+		Priority:       1,
 	},
 	{
 		Name:           ServerLuaLanguageServer,
 		InstallCmd:     "",
 		InstallWebsite: "https://github.com/LuaLS/lua-language-server/wiki/Getting-Started",
 		Langs:          []LangName{LangLua},
+		Priority:       1,
 	},
 	{
 		Name:           ServerOmnisharp,
@@ -114,6 +126,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g omnisharp-language-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangCSharp},
+		Priority:       1,
 	},
 	{
 		Name:           ServerPylsp,
@@ -121,6 +134,7 @@ var Servers = []Server{
 		InstallCmd:     "pip install python-lsp-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangPython},
+		Priority:       2,
 	},
 	{
 		Name:           ServerPyright,
@@ -128,6 +142,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g pyright",
 		InstallWebsite: "",
 		Langs:          []LangName{LangPython},
+		Priority:       3,
 	},
 	{
 		Name:           ServerRustAnalyzer,
@@ -135,6 +150,7 @@ var Servers = []Server{
 		InstallCmd:     "rustup component add rust-analyzer",
 		InstallWebsite: "",
 		Langs:          []LangName{LangRust},
+		Priority:       1,
 	},
 	{
 		Name:           ServerSolargraph,
@@ -142,6 +158,7 @@ var Servers = []Server{
 		InstallCmd:     "gem install solargraph",
 		InstallWebsite: "",
 		Langs:          []LangName{LangRuby},
+		Priority:       1,
 	},
 	{
 		Name:           ServerSvelteserver,
@@ -149,6 +166,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g svelte-language-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangSvelte},
+		Priority:       1,
 	},
 	{
 		Name:           ServerTypeScriptLanguageServer,
@@ -156,6 +174,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g typescript-language-server typescript",
 		InstallWebsite: "",
 		Langs:          []LangName{LangTypeScript},
+		Priority:       1,
 	},
 	{
 		Name:           ServerVSCodeCSSLanguageServer,
@@ -163,6 +182,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g vscode-langservers-extracted",
 		InstallWebsite: "",
 		Langs:          []LangName{LangCSS},
+		Priority:       1,
 	},
 	{
 		Name:           ServerVSCodeHTMLLanguageServer,
@@ -170,6 +190,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g vscode-langservers-extracted",
 		InstallWebsite: "",
 		Langs:          []LangName{LangHTML},
+		Priority:       1,
 	},
 	{
 		Name:           ServerVSCodeJSONLanguageServer,
@@ -177,6 +198,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g vscode-langservers-extracted",
 		InstallWebsite: "",
 		Langs:          []LangName{LangJSON},
+		Priority:       1,
 	},
 	{
 		Name:           ServerVLS,
@@ -184,6 +206,7 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g @volar/vue-language-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangVue},
+		Priority:       1,
 	},
 	{
 		Name:           ServerYAMLLanguageServer,
@@ -191,5 +214,6 @@ var Servers = []Server{
 		InstallCmd:     "npm install -g yaml-language-server",
 		InstallWebsite: "",
 		Langs:          []LangName{LangYAML},
+		Priority:       1,
 	},
 }

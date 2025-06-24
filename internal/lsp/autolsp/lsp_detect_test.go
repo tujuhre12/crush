@@ -68,7 +68,7 @@ func TestServerDetectorPriorityOrderInstalled(t *testing.T) {
 		t.Errorf("expected 3 python servers to be installed, got %d", len(installed))
 	}
 
-	// Verify they are in the order they appear in the Servers slice (jedi-language-server, pylsp, pyright)
+	// Verify they are in the priority order (jedi-language-server, pylsp, pyright)
 	expectedOrder := []string{"jedi-language-server", "pylsp", "pyright"}
 	for i, server := range installed {
 		if string(server.Name) != expectedOrder[i] {
@@ -99,7 +99,7 @@ func TestServerDetectorPriorityOrderToBeInstalled(t *testing.T) {
 		t.Errorf("expected first server to be gopls, got %s", toBeInstalled[0].Name)
 	}
 
-	// Remaining servers should be python servers in their original order
+	// Remaining servers should be python servers in their priority order
 	expectedPythonOrder := []string{"jedi-language-server", "pylsp", "pyright"}
 	for i, expectedName := range expectedPythonOrder {
 		if string(toBeInstalled[i+1].Name) != expectedName {

@@ -67,8 +67,8 @@ func (d *ServerDetector) sortByPriority(servers []Server) {
 			priorityB = slices.Index(d.langs, b.Langs[0])
 		)
 		switch {
-		case priorityA == -1 && priorityB == -1:
-			return 0
+		case priorityA == priorityB:
+			return a.Priority - b.Priority // server priority
 		case priorityA == -1:
 			return 1
 		case priorityB == -1:
