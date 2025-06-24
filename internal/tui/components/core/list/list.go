@@ -15,6 +15,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 	"github.com/charmbracelet/lipgloss/v2"
+	"github.com/gammazero/deque"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -126,15 +127,15 @@ func (ss *selectionState) isValidIndex(itemCount int) bool {
 // model is the main implementation of the ListModel interface.
 // It coordinates between view state, render state, and selection state.
 type model struct {
-	viewState      viewState      // Display and scrolling state
-	renderState    *renderState   // Rendering cache and state
-	selectionState selectionState // Item selection state
-	help           help.Model     // Help system for keyboard shortcuts
-	keyMap         KeyMap         // Key bindings for navigation
-	allItems       []util.Model   // The actual list items
-	gapSize        int            // Number of empty lines between items
-	padding        []int          // Padding around the list content
-	wrapNavigation bool           // Whether to wrap navigation at the ends
+	viewState      viewState                // Display and scrolling state
+	renderState    *renderState             // Rendering cache and state
+	selectionState selectionState           // Item selection state
+	help           help.Model               // Help system for keyboard shortcuts
+	keyMap         KeyMap                   // Key bindings for navigation
+	allItems       *deque.Deque[util.Model] // Item list using deque for efficient prepend/append
+	gapSize        int                      // Number of empty lines between items
+	padding        []int                    // Padding around the list content
+	wrapNavigation bool                     // Whether to wrap navigation at the ends
 
 	filterable        bool            // Whether items can be filtered
 	filterPlaceholder string          // Placeholder text for filter input
@@ -183,7 +184,10 @@ func WithPadding(padding ...int) listOptions {
 // WithItems sets the initial items for the list.
 func WithItems(items []util.Model) listOptions {
 	return func(m *model) {
-		m.allItems = items
+		m.allItems.Clear()
+		for _, item := range items {
+			m.allItems.PushBack(item)
+		}
 		m.filteredItems = items // Initially, all items are visible
 	}
 }
@@ -232,7 +236,7 @@ func New(opts ...listOptions) ListModel {
 	m := &model{
 		help:              help.New(),
 		keyMap:            DefaultKeyMap(),
-		allItems:          []util.Model{},
+		allItems:          &deque.Deque[util.Model]{},
 		filteredItems:     []util.Model{},
 		renderState:       newRenderState(),
 		gapSize:           DefaultGapSize,
@@ -256,6 +260,18 @@ func New(opts ...listOptions) ListModel {
 		m.input = ti
 	}
 	return m
+}
+
+// allItemsSlice converts the deque to a slice for compatibility with existing code.
+func (m *model) allItemsSlice() []util.Model {
+	if m.allItems.Len() == 0 {
+		return nil
+	}
+	result := make([]util.Model, m.allItems.Len())
+	for i := 0; i < m.allItems.Len(); i++ {
+		result[i] = m.allItems.At(i)
+	}
+	return result
 }
 
 // Init initializes the list component and sets up the initial items.
@@ -1052,8 +1068,8 @@ func (m *model) AppendItem(item util.Model) tea.Cmd {
 	cmds := []tea.Cmd{
 		item.Init(),
 	}
-	m.allItems = append(m.allItems, item)
-	m.filteredItems = m.allItems
+	m.allItems.PushBack(item)
+	m.filteredItems = m.allItemsSlice()
 	cmds = append(cmds, m.setItemSize(len(m.filteredItems)-1))
 	cmds = append(cmds, m.goToBottom())
 	m.renderState.needsRerender = true
@@ -1063,12 +1079,12 @@ func (m *model) AppendItem(item util.Model) tea.Cmd {
 // DeleteItem removes an item at the specified index.
 // Adjusts selection if necessary and triggers a complete re-render.
 func (m *model) DeleteItem(i int) {
-	if i < 0 || i >= len(m.filteredItems) {
+	if i < 0 || i >= m.allItems.Len() {
 		return
 	}
-	m.allItems = slices.Delete(m.allItems, i, i+1)
+	m.allItems.Remove(i)
 	delete(m.renderState.items, i)
-	m.filteredItems = m.allItems
+	m.filteredItems = m.allItemsSlice()
 
 	if m.selectionState.selectedIndex == i && m.selectionState.selectedIndex > 0 {
 		m.selectionState.selectedIndex--
@@ -1084,8 +1100,8 @@ func (m *model) DeleteItem(i int) {
 // Adjusts cached positions and selection index, then switches to forward mode.
 func (m *model) PrependItem(item util.Model) tea.Cmd {
 	cmds := []tea.Cmd{item.Init()}
-	m.allItems = append([]util.Model{item}, m.allItems...)
-	m.filteredItems = m.allItems
+	m.allItems.PushFront(item)
+	m.filteredItems = m.allItemsSlice()
 
 	// Shift all cached item indices by 1
 	newItems := make(map[int]renderedItem, len(m.renderState.items))
@@ -1117,7 +1133,10 @@ func (m *model) setReverse(reverse bool) {
 // Initializes all items, sets their sizes, and establishes initial selection.
 // Ensures the initial selection skips section headers.
 func (m *model) SetItems(items []util.Model) tea.Cmd {
-	m.allItems = items
+	m.allItems.Clear()
+	for _, item := range items {
+		m.allItems.PushBack(item)
+	}
 	m.filteredItems = items
 	cmds := []tea.Cmd{m.setAllItemsSize()}
 
@@ -1153,7 +1172,8 @@ func (m *model) parseSections() []section {
 	var sections []section
 	var currentSection *section
 
-	for _, item := range m.allItems {
+	for i := 0; i < m.allItems.Len(); i++ {
+		item := m.allItems.At(i)
 		if header, ok := item.(SectionHeader); ok && header.IsSectionHeader() {
 			// Start a new section
 			if currentSection != nil {
@@ -1208,17 +1228,18 @@ func (m *model) Filter(search string) tea.Cmd {
 	search = strings.ToLower(search)
 
 	// Clear focus and match indexes from all items
-	for _, item := range m.allItems {
-		if i, ok := item.(layout.Focusable); ok {
-			cmds = append(cmds, i.Blur())
+	for i := 0; i < m.allItems.Len(); i++ {
+		item := m.allItems.At(i)
+		if focusable, ok := item.(layout.Focusable); ok {
+			cmds = append(cmds, focusable.Blur())
 		}
-		if i, ok := item.(HasMatchIndexes); ok {
-			i.MatchIndexes(make([]int, 0))
+		if hasMatch, ok := item.(HasMatchIndexes); ok {
+			hasMatch.MatchIndexes(make([]int, 0))
 		}
 	}
 
 	if search == "" {
-		cmds = append(cmds, m.SetItems(m.allItems))
+		cmds = append(cmds, m.SetItems(m.allItemsSlice()))
 		return tea.Batch(cmds...)
 	}
 
