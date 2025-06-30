@@ -1,6 +1,7 @@
 package db
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -31,7 +32,7 @@ func Connect() (*sql.DB, error) {
 	}
 
 	// Verify connection
-	if err = db.Ping(); err != nil {
+	if err = db.PingContext(context.Background()); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -46,7 +47,7 @@ func Connect() (*sql.DB, error) {
 	}
 
 	for _, pragma := range pragmas {
-		if _, err = db.Exec(pragma); err != nil {
+		if _, err = db.ExecContext(context.Background(), pragma); err != nil {
 			logging.Error("Failed to set pragma", pragma, err)
 		} else {
 			logging.Debug("Set pragma", "pragma", pragma)
