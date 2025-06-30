@@ -324,6 +324,7 @@ func loadConfig(cwd string, debug bool) (*Config, error) {
 				"ls",
 				"sourcegraph",
 				"view",
+				"definitions",
 			},
 			// NO MCPs or LSPs by default
 			AllowedMCP: map[string][]string{},
@@ -1264,7 +1265,7 @@ func (c *Config) validateAgents(errors *ValidationErrors) {
 	}
 
 	validTools := []string{
-		"bash", "edit", "fetch", "glob", "grep", "ls", "sourcegraph", "view", "write", "agent",
+		"bash", "edit", "fetch", "glob", "grep", "ls", "sourcegraph", "view", "write", "agent", "definitions", "diagnostics",
 	}
 
 	for agentID, agent := range c.Agents {
@@ -1342,7 +1343,7 @@ func (c *Config) validateAgents(errors *ValidationErrors) {
 			if agent.Description != "An agent that helps with searching for context and finding implementation details." {
 				errors.Add(fieldPrefix+".description", "task agent description cannot be changed")
 			}
-			expectedTools := []string{"glob", "grep", "ls", "sourcegraph", "view"}
+			expectedTools := []string{"glob", "grep", "ls", "sourcegraph", "view", "definitions"}
 			if agent.AllowedTools != nil && !slices.Equal(agent.AllowedTools, expectedTools) {
 				errors.Add(fieldPrefix+".allowed_tools", "task agent allowed tools cannot be changed")
 			}

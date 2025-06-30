@@ -94,8 +94,9 @@ func NewAgent(
 	ctx := context.Background()
 	cfg := config.Get()
 	otherTools := GetMcpTools(ctx, permissions)
-	if len(lspClients) > 0 {
+	if len(cfg.LSP) > 0 {
 		otherTools = append(otherTools, tools.NewDiagnosticsTool(lspClients))
+		otherTools = append(otherTools, tools.NewDefinitionsTool(lspClients))
 	}
 
 	allTools := []tools.BaseTool{

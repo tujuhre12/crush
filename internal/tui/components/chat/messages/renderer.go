@@ -160,6 +160,7 @@ func init() {
 	registry.register(tools.LSToolName, func() renderer { return lsRenderer{} })
 	registry.register(tools.SourcegraphToolName, func() renderer { return sourcegraphRenderer{} })
 	registry.register(tools.DiagnosticsToolName, func() renderer { return diagnosticsRenderer{} })
+	registry.register(tools.DefinitionsToolName, func() renderer { return definitionsRenderer{} })
 	registry.register(agent.AgentToolName, func() renderer { return agentRenderer{} })
 }
 
@@ -489,6 +490,31 @@ func (dr diagnosticsRenderer) Render(v *toolCallCmp) string {
 }
 
 // -----------------------------------------------------------------------------
+//  Definitions renderer
+// -----------------------------------------------------------------------------
+
+// definitionsRenderer handles file symbol definitions display
+type definitionsRenderer struct {
+	baseRenderer
+}
+
+// Render displays file definitions with enhanced formatting for symbol structure
+func (dr definitionsRenderer) Render(v *toolCallCmp) string {
+	var params tools.DefinitionsParams
+	var args []string
+	if err := dr.unmarshalParams(v.call.Input, &params); err == nil {
+		file := fsext.PrettyPath(params.FilePath)
+		args = newParamBuilder().addMain(file).build()
+	}
+
+	return dr.renderWithParams(v, "Definitions", args, func() string {
+		// The definitions tool outputs well-structured markdown content
+		// We'll render it as markdown to preserve the formatting and hierarchy
+		return renderCodeContent(v, "definitions.md", v.result.Content, 0)
+	})
+}
+
+// -----------------------------------------------------------------------------
 //  Task renderer
 // -----------------------------------------------------------------------------
 
@@ -747,6 +773,10 @@ func prettifyToolName(name string) string {
 		return "View"
 	case tools.WriteToolName:
 		return "Write"
+	case tools.DiagnosticsToolName:
+		return "Diagnostics"
+	case tools.DefinitionsToolName:
+		return "Definitions"
 	default:
 		return name
 	}
