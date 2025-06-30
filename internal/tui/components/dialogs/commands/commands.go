@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
+	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/tui/components/chat"
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
@@ -48,21 +49,23 @@ type commandDialogCmp struct {
 	commandList  list.ListModel
 	keyMap       CommandsDialogKeyMap
 	help         help.Model
-	commandType  int       // SystemCommands or UserCommands
-	userCommands []Command // User-defined commands
-	sessionID    string    // Current session ID
+	commandType  int                        // SystemCommands or UserCommands
+	userCommands []Command                  // User-defined commands
+	sessionID    string                     // Current session ID
+	lspClients   map[string]*lsp.Client     // LSP clients for diagnostics check
 }
 
 type (
 	SwitchSessionsMsg    struct{}
 	SwitchModelMsg       struct{}
 	ToggleCompactModeMsg struct{}
+	ShowDiagnosticsMsg   struct{}
 	CompactMsg           struct {
 		SessionID string
 	}
 )
 
-func NewCommandDialog(sessionID string) CommandsDialog {
+func NewCommandDialog(sessionID string, lspClients map[string]*lsp.Client) CommandsDialog {
 	listKeyMap := list.DefaultKeyMap()
 	keyMap := DefaultCommandsDialogKeyMap()
 
@@ -85,12 +88,13 @@ func NewCommandDialog(sessionID string) CommandsDialog {
 	help := help.New()
 	help.Styles = t.S().Help
 	return &commandDialogCmp{
-		commandList: commandList,
-		width:       defaultWidth,
-		keyMap:      DefaultCommandsDialogKeyMap(),
-		help:        help,
-		commandType: SystemCommands,
-		sessionID:   sessionID,
+		commandList:  commandList,
+		width:        defaultWidth,
+		keyMap:       DefaultCommandsDialogKeyMap(),
+		help:         help,
+		commandType:  SystemCommands,
+		sessionID:    sessionID,
+		lspClients:   lspClients,
 	}
 }
 
@@ -226,6 +230,16 @@ func (c *commandDialogCmp) Position() (int, int) {
 	return row, col
 }
 
+func (c *commandDialogCmp) hasDiagnostics() bool {
+	for _, client := range c.lspClients {
+		diagnostics := client.GetDiagnostics()
+		if len(diagnostics) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *commandDialogCmp) defaultCommands() []Command {
 	commands := []Command{
 		{
@@ -273,7 +287,7 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 		})
 	}
 
-	return append(commands, []Command{
+	baseCommands := []Command{
 		{
 			ID:          "switch_session",
 			Title:       "Switch Session",
@@ -291,7 +305,22 @@ func (c *commandDialogCmp) defaultCommands() []Command {
 				return util.CmdHandler(SwitchModelMsg{})
 			},
 		},
-	}...)
+	}
+
+	// Add diagnostics command only if there are diagnostics available
+	if c.hasDiagnostics() {
+		diagnosticsCmd := Command{
+			ID:          "diagnostics",
+			Title:       "Show Diagnostics",
+			Description: "View LSP diagnostics for the project",
+			Handler: func(cmd Command) tea.Cmd {
+				return util.CmdHandler(ShowDiagnosticsMsg{})
+			},
+		}
+		baseCommands = append([]Command{diagnosticsCmd}, baseCommands...)
+	}
+
+	return append(commands, baseCommands...)
 }
 
 func (c *commandDialogCmp) ID() dialogs.DialogID {

@@ -56,7 +56,7 @@ func NewClient(ctx context.Context, command string, args ...string) (*Client, er
 	cmd := exec.CommandContext(ctx, command, args...)
 	// Copy env
 	cmd.Env = os.Environ()
-
+	
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stdin pipe: %w", err)

@@ -19,6 +19,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/commands"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/compact"
+	"github.com/charmbracelet/crush/internal/tui/components/dialogs/diagnostics"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
 	initDialog "github.com/charmbracelet/crush/internal/tui/components/dialogs/init"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/models"
@@ -162,6 +163,12 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, util.CmdHandler(
 			dialogs.OpenDialogMsg{
 				Model: models.NewModelDialogCmp(),
+			},
+		)
+	case commands.ShowDiagnosticsMsg:
+		return a, util.CmdHandler(
+			dialogs.OpenDialogMsg{
+				Model: diagnostics.NewDiagnosticsDialogCmp(a.app.LSPClients),
 			},
 		)
 	// Compact
@@ -343,7 +350,7 @@ func (a *appModel) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 			return util.CmdHandler(dialogs.CloseDialogMsg{})
 		}
 		return util.CmdHandler(dialogs.OpenDialogMsg{
-			Model: commands.NewCommandDialog(a.selectedSessionID),
+			Model: commands.NewCommandDialog(a.selectedSessionID, a.app.LSPClients),
 		})
 	case key.Matches(msg, a.keyMap.Sessions):
 		if a.dialog.ActiveDialogID() == sessions.SessionsDialogID {
