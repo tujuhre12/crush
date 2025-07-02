@@ -42,7 +42,7 @@ func LangDetectorWithDir(dir string) LangDetectorOption {
 }
 
 // Detect scans the filesystem and returns detected languages sorted by priority.
-func (d *LangDetector) Detect() []Lang {
+func (d *LangDetector) Detect() []LangName {
 	priorities := make(map[LangName]int)
 
 	_ = fs.WalkDir(d.fs, ".", func(path string, e fs.DirEntry, err error) error {
@@ -69,14 +69,14 @@ func (d *LangDetector) Detect() []Lang {
 		return nil
 	})
 
-	var langs []Lang
+	var langNames []LangName
 	for _, lang := range Langs {
 		if priorities[lang.Name] > 0 {
-			langs = append(langs, lang)
+			langNames = append(langNames, lang.Name)
 		}
 	}
-	slices.SortFunc(langs, func(a, b Lang) int {
-		return priorities[b.Name] - priorities[a.Name]
+	slices.SortFunc(langNames, func(a, b LangName) int {
+		return priorities[b] - priorities[a]
 	})
-	return langs
+	return langNames
 }

@@ -13,23 +13,23 @@ import (
 func TestLangDetector(t *testing.T) {
 	tests := []struct {
 		name     string
-		expected []string
+		expected []autolsp.LangName
 		file     string
 	}{
-		{"Dart", []string{"dart", "yaml"}, "pubspec.yaml"},
-		{"Elixir", []string{"elixir"}, "mix.exs"},
-		{"Go", []string{"go"}, "go.mod"},
-		{"Java-Gradle", []string{"java"}, "build.gradle"},
-		{"Java-POM", []string{"java"}, "pom.xml"},
-		{"JavaScript", []string{"javascript", "json"}, "package.json"},
-		{"PHP", []string{"php", "json"}, "composer.json"},
-		{"Python-Pyproject", []string{"python"}, "pyproject.toml"},
-		{"Python-Requirements", []string{"python"}, "requirements.txt"},
-		{"Python-SetupPy", []string{"python"}, "setup.py"},
-		{"Ruby", []string{"ruby"}, "Gemfile"},
-		{"Rust", []string{"rust"}, "Cargo.toml"},
-		{"YAML-yaml", []string{"yaml"}, "config.yaml"},
-		{"YAML-yml", []string{"yaml"}, "config.yml"},
+		{"Dart", []autolsp.LangName{"dart", "yaml"}, "pubspec.yaml"},
+		{"Elixir", []autolsp.LangName{"elixir"}, "mix.exs"},
+		{"Go", []autolsp.LangName{"go"}, "go.mod"},
+		{"Java-Gradle", []autolsp.LangName{"java"}, "build.gradle"},
+		{"Java-POM", []autolsp.LangName{"java"}, "pom.xml"},
+		{"JavaScript", []autolsp.LangName{"javascript", "json"}, "package.json"},
+		{"PHP", []autolsp.LangName{"php", "json"}, "composer.json"},
+		{"Python-Pyproject", []autolsp.LangName{"python"}, "pyproject.toml"},
+		{"Python-Requirements", []autolsp.LangName{"python"}, "requirements.txt"},
+		{"Python-SetupPy", []autolsp.LangName{"python"}, "setup.py"},
+		{"Ruby", []autolsp.LangName{"ruby"}, "Gemfile"},
+		{"Rust", []autolsp.LangName{"rust"}, "Cargo.toml"},
+		{"YAML-yaml", []autolsp.LangName{"yaml"}, "config.yaml"},
+		{"YAML-yml", []autolsp.LangName{"yaml"}, "config.yml"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -42,8 +42,8 @@ func TestLangDetector(t *testing.T) {
 			)
 			langs := d.Detect()
 
-			if !reflect.DeepEqual(tt.expected, collectNames(langs)) {
-				t.Errorf("expected languages %s, got %s", tt.expected, collectNames(langs))
+			if !reflect.DeepEqual(tt.expected, langs) {
+				t.Errorf("expected languages %s, got %s", tt.expected, langs)
 			}
 		})
 	}
@@ -64,11 +64,11 @@ func TestLangDetectorMultiple(t *testing.T) {
 	d := autolsp.NewLangDetector(
 		autolsp.LangDetectorWithFS(tmpfs),
 	)
-	expected := []string{"javascript", "ruby", "json"}
+	expected := []autolsp.LangName{"javascript", "ruby", "json"}
 	langs := d.Detect()
 
-	if !reflect.DeepEqual(expected, collectNames(langs)) {
-		t.Errorf("expected languages %s, got %s", expected, collectNames(langs))
+	if !reflect.DeepEqual(expected, langs) {
+		t.Errorf("expected languages %s, got %s", expected, langs)
 	}
 }
 
@@ -83,11 +83,10 @@ func TestLangDetectorIgnoredDir(t *testing.T) {
 	d := autolsp.NewLangDetector(
 		autolsp.LangDetectorWithFS(tmpfs),
 	)
-	expected := []string{}
 	langs := d.Detect()
 
-	if !reflect.DeepEqual(expected, collectNames(langs)) {
-		t.Errorf("expected languages %s, got %s", expected, collectNames(langs))
+	if len(langs) != 0 {
+		t.Errorf("expected languages to be of length %d, got %d", 0, len(langs))
 	}
 }
 
@@ -95,7 +94,7 @@ func TestLangDetectorThisProject(t *testing.T) {
 	d := autolsp.NewLangDetector(
 		autolsp.LangDetectorWithFS(os.DirFS("../../..")),
 	)
-	expected := []string{
+	expected := []autolsp.LangName{
 		"go",
 		"yaml",
 		"json",
@@ -103,15 +102,7 @@ func TestLangDetectorThisProject(t *testing.T) {
 	}
 	langs := d.Detect()
 
-	if !reflect.DeepEqual(expected, collectNames(langs)) {
-		t.Errorf("expected languages %s, got %s", expected, collectNames(langs))
+	if !reflect.DeepEqual(expected, langs) {
+		t.Errorf("expected languages %s, got %s", expected, langs)
 	}
-}
-
-func collectNames(langs []autolsp.Lang) []string {
-	names := make([]string, len(langs))
-	for i, lang := range langs {
-		names[i] = string(lang.Name)
-	}
-	return names
 }
