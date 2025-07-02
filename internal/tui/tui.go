@@ -21,6 +21,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/compact"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
 	initDialog "github.com/charmbracelet/crush/internal/tui/components/dialogs/init"
+	"github.com/charmbracelet/crush/internal/tui/components/dialogs/lsp"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/models"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/permissions"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/quit"
@@ -168,6 +169,12 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case commands.CompactMsg:
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
 			Model: compact.NewCompactDialogCmp(a.app.CoderAgent, msg.SessionID, true),
+		})
+
+	// Manage LSPs
+	case commands.ManageLSPMsg:
+		return a, util.CmdHandler(dialogs.OpenDialogMsg{
+			Model: lsp.New(),
 		})
 
 	// Model Switch
