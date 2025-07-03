@@ -107,6 +107,7 @@ func NewAgent(
 		tools.NewLsTool(),
 		tools.NewSourcegraphTool(),
 		tools.NewViewTool(lspClients),
+		tools.NewVSCodeDiffTool(permissions),
 		tools.NewWriteTool(lspClients, permissions, history),
 	}
 
