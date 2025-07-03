@@ -6,6 +6,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 
+	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/lsp/autolsp"
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
@@ -29,6 +30,10 @@ type Item struct {
 
 type lspDetectedMsg struct {
 	items []Item
+}
+
+type LSPSelectedMsg struct {
+	Item Item
 }
 
 // LSPDialog interface for the model selection dialog
@@ -113,6 +118,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keyMap.Close):
 			return m, util.CmdHandler(dialogs.CloseDialogMsg{})
+		case key.Matches(msg, m.keyMap.Select):
+			selectedIdx := m.list.SelectedIndex()
+			if selectedIdx == list.NoSelection {
+				return m, nil
+			}
+			items := m.list.Items()
+			selectedItem := items[selectedIdx].(completions.CompletionItem).Value().(Item)
+			return m, tea.Sequence(
+				util.CmdHandler(dialogs.CloseDialogMsg{}),
+				util.CmdHandler(LSPSelectedMsg{Item: selectedItem}),
+			)
 		default:
 			var cmd tea.Cmd
 			u, cmd := m.list.Update(msg)
@@ -146,7 +162,14 @@ func (m *Model) setListItems(items []Item) tea.Cmd {
 	if len(installedItems) > 0 {
 		listItems = append(listItems, commands.NewItemSection("Installed"))
 		for _, lsp := range installedItems {
-			text := string(lsp.Server.Name)
+			// Check if LSP is enabled in config
+			cfg := config.Get()
+			statusIcon := "🔴" // Red circle for disabled/not configured
+			if cfg.HasLSP(string(lsp.Server.Name)) {
+				statusIcon = "🟢" // Green circle for enabled and configured
+			}
+
+			text := statusIcon + " " + string(lsp.Server.Name)
 			listItems = append(listItems, completions.NewCompletionItem(text, lsp))
 		}
 	}
@@ -155,7 +178,8 @@ func (m *Model) setListItems(items []Item) tea.Cmd {
 	if len(notInstalledItems) > 0 {
 		listItems = append(listItems, commands.NewItemSection("Not Installed"))
 		for _, lsp := range notInstalledItems {
-			text := string(lsp.Server.Name)
+			// Not installed LSPs show gray circle
+			text := "⚪ " + string(lsp.Server.Name)
 			listItems = append(listItems, completions.NewCompletionItem(text, lsp))
 		}
 	}

@@ -16,7 +16,7 @@ func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Select: key.NewBinding(
 			key.WithKeys("enter", "ctrl+y"),
-			key.WithHelp("enter", "confirm"),
+			key.WithHelp("enter", "install / toggle"),
 		),
 		Next: key.NewBinding(
 			key.WithKeys("down", "ctrl+n"),
