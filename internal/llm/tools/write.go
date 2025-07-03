@@ -234,7 +234,7 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 	result := fmt.Sprintf("File successfully written: %s", filePath)
 	result = fmt.Sprintf("<result>\n%s\n</result>", result)
 	result += getDiagnostics(filePath, w.lspClients)
-	
+
 	// Only include diff metadata if VS Code diff wasn't opened
 	var metadata WriteResponseMetadata
 	if !vscodeDiffOpened {
@@ -244,6 +244,6 @@ func (w *writeTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 			Removals:  removals,
 		}
 	}
-	
+
 	return WithResponseMetadata(NewTextResponse(result), metadata), nil
 }

@@ -20,30 +20,30 @@ func AutoOpenVSCodeDiff(ctx context.Context, permissions permission.Service, bef
 	if os.Getenv("VSCODE_INJECTION") != "1" {
 		return false
 	}
-	
+
 	cfg := config.Get()
-	
+
 	// Check if auto-open is enabled
 	if !cfg.Options.AutoOpenVSCodeDiff {
 		return false
 	}
-	
+
 	// Check if there are any changes
 	if beforeContent == afterContent {
 		return false
 	}
-	
+
 	// Check if VS Code is available
 	if !isVSCodeAvailable() {
 		return false
 	}
-	
+
 	// Get session ID for permissions
 	sessionID, _ := GetContextValues(ctx)
 	if sessionID == "" {
 		return false
 	}
-	
+
 	// Create titles from filename
 	leftTitle := "before"
 	rightTitle := "after"
@@ -52,7 +52,7 @@ func AutoOpenVSCodeDiff(ctx context.Context, permissions permission.Service, bef
 		leftTitle = "before_" + base
 		rightTitle = "after_" + base
 	}
-	
+
 	// Request permission to open VS Code
 	permissionParams := VSCodeDiffPermissionsParams{
 		LeftContent:  beforeContent,
@@ -61,7 +61,7 @@ func AutoOpenVSCodeDiff(ctx context.Context, permissions permission.Service, bef
 		RightTitle:   rightTitle,
 		Language:     language,
 	}
-	
+
 	p := permissions.Request(
 		permission.CreatePermissionRequest{
 			SessionID:   sessionID,
@@ -72,11 +72,11 @@ func AutoOpenVSCodeDiff(ctx context.Context, permissions permission.Service, bef
 			Params:      permissionParams,
 		},
 	)
-	
+
 	if !p {
 		return false
 	}
-	
+
 	// Open VS Code diff - this would actually open VS Code in a real implementation
 	return openVSCodeDiffDirect(beforeContent, afterContent, leftTitle, rightTitle, language)
 }
@@ -90,10 +90,10 @@ func isVSCodeAvailable() bool {
 func getVSCodeCommandInternal() string {
 	// Try common VS Code command names
 	commands := []string{"code", "code-insiders"}
-	
+
 	// On macOS, also try the full path
 	if runtime.GOOS == "darwin" {
-		commands = append(commands, 
+		commands = append(commands,
 			"/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code",
 			"/Applications/Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code",
 		)
@@ -114,7 +114,7 @@ func openVSCodeDiffDirect(beforeContent, afterContent, leftTitle, rightTitle, la
 	if vscodeCmd == "" {
 		return false
 	}
-	
+
 	// This is a simplified version that would create temp files and open VS Code
 	// For now, we'll return true to indicate it would work
 	// In a full implementation, this would:
@@ -122,17 +122,17 @@ func openVSCodeDiffDirect(beforeContent, afterContent, leftTitle, rightTitle, la
 	// 2. Use the appropriate file extension based on language
 	// 3. Execute: code --diff leftFile rightFile
 	// 4. Clean up files after a delay
-	
+
 	// TODO: Implement the actual file creation and VS Code execution
 	// This would be similar to the logic in vscode.go but simplified
-	
+
 	return true // Placeholder - indicates VS Code would be opened
 }
 
 // getLanguageFromExtension determines the language identifier from a file extension
 func getLanguageFromExtension(filePath string) string {
 	ext := strings.ToLower(filepath.Ext(filePath))
-	
+
 	languageMap := map[string]string{
 		".js":         "javascript",
 		".jsx":        "javascript",
@@ -174,10 +174,10 @@ func getLanguageFromExtension(filePath string) string {
 		".mk":         "makefile",
 		".makefile":   "makefile",
 	}
-	
+
 	if language, ok := languageMap[ext]; ok {
 		return language
 	}
-	
+
 	return "text"
 }

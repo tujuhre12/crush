@@ -739,7 +739,7 @@ func getDefaultProviderConfig(p provider.Provider, apiKey string) ProviderConfig
 func defaultConfigBasedOnEnv() *Config {
 	// VS Code diff is disabled by default
 	autoOpenVSCodeDiff := false
-	
+
 	cfg := &Config{
 		Options: Options{
 			DataDirectory:      defaultDataDirectory,
