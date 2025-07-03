@@ -36,6 +36,12 @@ type LSPSelectedMsg struct {
 	Item Item
 }
 
+type LSPInstallationMsg struct {
+	ServerName string
+	Success    bool
+	Message    string
+}
+
 // LSPDialog interface for the model selection dialog
 type LSPDialog interface {
 	dialogs.DialogModel
@@ -125,6 +131,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			items := m.list.Items()
 			selectedItem := items[selectedIdx].(completions.CompletionItem).Value().(Item)
+
 			return m, tea.Sequence(
 				util.CmdHandler(dialogs.CloseDialogMsg{}),
 				util.CmdHandler(LSPSelectedMsg{Item: selectedItem}),
