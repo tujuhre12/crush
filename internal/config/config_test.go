@@ -21,6 +21,7 @@ func reset() {
 		"GEMINI_API_KEY",
 		"XAI_API_KEY",
 		"OPENROUTER_API_KEY",
+		"LLAMA_API_KEY",
 
 		// Google Cloud / VertexAI
 		"GOOGLE_GENAI_USE_VERTEXAI",
@@ -405,11 +406,12 @@ func TestEnvVars_AllSupportedAPIKeys(t *testing.T) {
 	os.Setenv("GEMINI_API_KEY", "test-gemini-key")
 	os.Setenv("XAI_API_KEY", "test-xai-key")
 	os.Setenv("OPENROUTER_API_KEY", "test-openrouter-key")
+	os.Setenv("LLAMA_API_KEY", "test-llama-key")
 
 	cfg, err := Init(cwdDir, false)
 
 	require.NoError(t, err)
-	assert.Len(t, cfg.Providers, 5)
+	assert.Len(t, cfg.Providers, 6)
 
 	anthropicProvider := cfg.Providers[provider.InferenceProviderAnthropic]
 	assert.Equal(t, "test-anthropic-key", anthropicProvider.APIKey)
@@ -431,6 +433,11 @@ func TestEnvVars_AllSupportedAPIKeys(t *testing.T) {
 	assert.Equal(t, "test-openrouter-key", openrouterProvider.APIKey)
 	assert.Equal(t, provider.TypeOpenAI, openrouterProvider.ProviderType)
 	assert.Equal(t, "https://openrouter.ai/api/v1", openrouterProvider.BaseURL)
+
+	llamaProvider := cfg.Providers[provider.InferenceProviderLlama]
+	assert.Equal(t, "test-llama-key", llamaProvider.APIKey)
+	assert.Equal(t, provider.TypeLlama, llamaProvider.ProviderType)
+	assert.Equal(t, "https://api.llama.com/compat/v1", llamaProvider.BaseURL)
 }
 
 func TestEnvVars_PartialEnvironmentVariables(t *testing.T) {

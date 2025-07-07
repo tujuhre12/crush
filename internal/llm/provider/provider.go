@@ -189,6 +189,11 @@ func NewProvider(cfg config.ProviderConfig, opts ...ProviderClientOption) (Provi
 			options: clientOptions,
 			client:  newOpenAIClient(clientOptions),
 		}, nil
+	case provider.TypeLlama:
+		return &baseProvider[LlamaClient]{
+			options: clientOptions,
+			client:  newLlamaClient(clientOptions),
+		}, nil
 	}
 	return nil, fmt.Errorf("provider not supported: %s", cfg.ProviderType)
 }

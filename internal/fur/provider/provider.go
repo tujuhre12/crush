@@ -13,6 +13,7 @@ const (
 	TypeBedrock   Type = "bedrock"
 	TypeVertexAI  Type = "vertexai"
 	TypeXAI       Type = "xai"
+	TypeLlama     Type = "llama"
 )
 
 // InferenceProvider represents the inference provider identifier.
@@ -28,6 +29,7 @@ const (
 	InferenceProviderVertexAI   InferenceProvider = "vertexai"
 	InferenceProviderXAI        InferenceProvider = "xai"
 	InferenceProviderOpenRouter InferenceProvider = "openrouter"
+	InferenceProviderLlama      InferenceProvider = "llama"
 )
 
 // Provider represents an AI provider configuration.
@@ -69,5 +71,6 @@ func KnownProviders() []InferenceProvider {
 		InferenceProviderVertexAI,
 		InferenceProviderXAI,
 		InferenceProviderOpenRouter,
+		InferenceProviderLlama,
 	}
 }

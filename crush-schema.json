@@ -498,7 +498,14 @@
             "mistralai/mistral-7b-instruct-v0.1",
             "openai/gpt-3.5-turbo-16k",
             "openai/gpt-4",
-            "openai/gpt-4-0314"
+            "openai/gpt-4-0314",
+            "Llama-4-Maverick-17B-128E-Instruct-FP8",
+            "Llama-4-Scout-17B-128E-Instruct-FP8",
+            "Llama-3.3-70B-Instruct",
+            "Llama-3.3-8B-Instruct",
+            "Cerebras-Llama-4-Maverick-17B-128E-Instruct",
+            "Cerebras-Llama-4-Scout-17B-16E-Instruct",
+            "Groq-Llama-4-Maverick-17B-128E-Instruct"
           ],
           "title": "Model ID",
           "description": "ID of the preferred model"
@@ -513,7 +520,8 @@
             "bedrock",
             "vertex",
             "xai",
-            "openrouter"
+            "openrouter",
+            "llama"
           ],
           "title": "Provider",
           "description": "Provider for the preferred model"
@@ -569,7 +577,8 @@
             "bedrock",
             "vertex",
             "xai",
-            "openrouter"
+            "openrouter",
+            "llama"
           ],
           "title": "Provider ID",
           "description": "Unique identifier for the provider"

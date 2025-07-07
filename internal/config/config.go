@@ -685,6 +685,12 @@ func providerDefaultConfig(providerID provider.InferenceProvider) ProviderConfig
 			ID:           providerID,
 			ProviderType: provider.TypeVertexAI,
 		}
+	case provider.InferenceProviderLlama:
+		return ProviderConfig{
+			ID:           providerID,
+			ProviderType: provider.TypeLlama,
+			BaseURL:      "https://api.llama.com/compat/v1",
+		}
 	default:
 		return ProviderConfig{
 			ID:           providerID,
@@ -1061,6 +1067,7 @@ func (c *Config) validateProviders(errors *ValidationErrors) {
 		provider.TypeBedrock,
 		provider.TypeVertexAI,
 		provider.TypeXAI,
+		provider.TypeLlama, // Added Llama
 	}
 
 	for providerID, providerConfig := range c.Providers {
