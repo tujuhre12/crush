@@ -1,4 +1,4 @@
-b> [!WARNING]
+> [!WARNING]
 > 🚧 This is a pre-release under heavy, active development. Things are still in flux but we’re excited to share early progress.
 
 # Crush
@@ -44,7 +44,7 @@ providers.
 | `AZURE_OPENAI_ENDPOINT`    | Azure OpenAI models                                |
 | `AZURE_OPENAI_API_KEY`     | Azure OpenAI models (optional when using Entra ID) |
 | `AZURE_OPENAI_API_VERSION` | Azure OpenAI models                                |
-| `LLAMA_API_KEY`             | Llama API                                          |
+| `LLAMA_API_KEY`            | Llama API                                          |
 
 ## License
 

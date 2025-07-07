@@ -1067,7 +1067,7 @@ func (c *Config) validateProviders(errors *ValidationErrors) {
 		provider.TypeBedrock,
 		provider.TypeVertexAI,
 		provider.TypeXAI,
-		provider.TypeLlama, // Added Llama
+		provider.TypeLlama,
 	}
 
 	for providerID, providerConfig := range c.Providers {
