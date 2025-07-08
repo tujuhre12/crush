@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/crush/internal/fsext"
 )
@@ -64,6 +65,7 @@ type GlobResponseMetadata struct {
 
 type globTool struct {
 	workingDir string
+	mu         sync.Mutex
 }
 
 func NewGlobTool(workingDir string) BaseTool {
@@ -109,20 +111,21 @@ func (g *globTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		searchPath = g.workingDir
 	}
 
+	g.mu.Lock()
 	files, truncated, err := globFiles(params.Pattern, searchPath, 100)
 	if err != nil {
+		g.mu.Unlock()
 		return ToolResponse{}, fmt.Errorf("error finding files: %w", err)
 	}
 
-	var output string
-	if len(files) == 0 {
-		output = "No files found"
-	} else {
+	output := "No files found"
+	if len(files) > 0 {
 		output = strings.Join(files, "\n")
 		if truncated {
 			output += "\n\n(Results are truncated. Consider using a more specific path or pattern.)"
 		}
 	}
+	g.mu.Unlock()
 
 	return WithResponseMetadata(
 		NewTextResponse(output),

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -95,14 +96,14 @@ func NewFastGlobWalker(searchPath string) *FastGlobWalker {
 	return walker
 }
 
-func (w *FastGlobWalker) shouldSkip(path string) bool {
+func shouldSkip(path, rootPath string, gitignore *ignore.GitIgnore) bool {
 	if SkipHidden(path) {
 		return true
 	}
 
-	if w.gitignore != nil {
-		relPath, err := filepath.Rel(w.rootPath, path)
-		if err == nil && w.gitignore.MatchesPath(relPath) {
+	if gitignore != nil {
+		relPath, err := filepath.Rel(rootPath, path)
+		if err == nil && gitignore.MatchesPath(relPath) {
 			return true
 		}
 	}
@@ -111,6 +112,7 @@ func (w *FastGlobWalker) shouldSkip(path string) bool {
 }
 
 func GlobWithDoubleStar(pattern, searchPath string, limit int) ([]string, bool, error) {
+	var mu sync.Mutex
 	walker := NewFastGlobWalker(searchPath)
 	var matches []FileInfo
 	conf := fastwalk.Config{
@@ -119,21 +121,28 @@ func GlobWithDoubleStar(pattern, searchPath string, limit int) ([]string, bool, 
 		ToSlash: fastwalk.DefaultToSlash(),
 		Sort:    fastwalk.SortFilesFirst,
 	}
+	rootPath, gitignore := walker.rootPath, walker.gitignore
 	err := fastwalk.Walk(&conf, searchPath, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil // Skip files we can't access
 		}
 
 		if d.IsDir() {
-			if walker.shouldSkip(path) {
+			mu.Lock()
+			if shouldSkip(path, rootPath, gitignore) {
+				mu.Unlock()
 				return filepath.SkipDir
 			}
+			mu.Unlock()
 			return nil
 		}
 
-		if walker.shouldSkip(path) {
+		mu.Lock()
+		if shouldSkip(path, rootPath, gitignore) {
+			mu.Unlock()
 			return nil
 		}
+		mu.Unlock()
 
 		// Check if path matches the pattern
 		relPath, err := filepath.Rel(searchPath, path)
@@ -150,6 +159,9 @@ func GlobWithDoubleStar(pattern, searchPath string, limit int) ([]string, bool, 
 		if err != nil {
 			return nil
 		}
+
+		mu.Lock()
+		defer mu.Unlock()
 
 		matches = append(matches, FileInfo{Path: path, ModTime: info.ModTime()})
 		if limit > 0 && len(matches) >= limit*2 {
