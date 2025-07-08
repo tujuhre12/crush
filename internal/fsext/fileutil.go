@@ -23,46 +23,10 @@ var (
 
 func init() {
 	var err error
-	rgPath, err = exec.LookPath("rg")
-	if err != nil {
-		slog.Warn("Ripgrep (rg) not found in $PATH. Some features might be limited or slower.")
-	}
 	fzfPath, err = exec.LookPath("fzf")
 	if err != nil {
 		slog.Warn("FZF not found in $PATH. Some features might be limited or slower.")
 	}
-}
-
-func GetRgCmd(globPattern string) *exec.Cmd {
-	if rgPath == "" {
-		return nil
-	}
-	rgArgs := []string{
-		"--files",
-		"-L",
-		"--null",
-	}
-	if globPattern != "" {
-		if !filepath.IsAbs(globPattern) && !strings.HasPrefix(globPattern, "/") {
-			globPattern = "/" + globPattern
-		}
-		rgArgs = append(rgArgs, "--glob", globPattern)
-	}
-	return exec.Command(rgPath, rgArgs...)
-}
-
-func GetRgSearchCmd(pattern, path, include string) *exec.Cmd {
-	if rgPath == "" {
-		return nil
-	}
-	// Use -n to show line numbers and include the matched line
-	args := []string{"-H", "-n", pattern}
-	if include != "" {
-		args = append(args, "--glob", include)
-	}
-	args = append(args, path)
-
-	return exec.Command(rgPath, args...)
 }
 
 type FileInfo struct {

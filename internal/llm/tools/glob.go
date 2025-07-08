@@ -1,14 +1,9 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"os/exec"
-	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/charmbracelet/crush/internal/fsext"
@@ -139,49 +134,5 @@ func (g *globTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 }
 
 func globFiles(pattern, searchPath string, limit int) ([]string, bool, error) {
-	cmdRg := fsext.GetRgCmd(pattern)
-	if cmdRg != nil {
-		cmdRg.Dir = searchPath
-		matches, err := runRipgrep(cmdRg, searchPath, limit)
-		if err == nil {
-			return matches, len(matches) >= limit && limit > 0, nil
-		}
-		slog.Warn(fmt.Sprintf("Ripgrep execution failed: %v. Falling back to doublestar.", err))
-	}
-
 	return fsext.GlobWithDoubleStar(pattern, searchPath, limit)
-}
-
-func runRipgrep(cmd *exec.Cmd, searchRoot string, limit int) ([]string, error) {
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("ripgrep: %w\n%s", err, out)
-	}
-
-	var matches []string
-	for p := range bytes.SplitSeq(out, []byte{0}) {
-		if len(p) == 0 {
-			continue
-		}
-		absPath := string(p)
-		if !filepath.IsAbs(absPath) {
-			absPath = filepath.Join(searchRoot, absPath)
-		}
-		if fsext.SkipHidden(absPath) {
-			continue
-		}
-		matches = append(matches, absPath)
-	}
-
-	sort.SliceStable(matches, func(i, j int) bool {
-		return len(matches[i]) < len(matches[j])
-	})
-
-	if limit > 0 && len(matches) > limit {
-		matches = matches[:limit]
-	}
-	return matches, nil
 }
