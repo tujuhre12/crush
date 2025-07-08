@@ -7,11 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -248,12 +246,9 @@ func (g *grepTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 }
 
 func searchFiles(pattern, rootPath, include string, limit int) ([]grepMatch, bool, error) {
-	matches, err := searchWithRipgrep(pattern, rootPath, include)
+	matches, err := searchFilesWithRegex(pattern, rootPath, include)
 	if err != nil {
-		matches, err = searchFilesWithRegex(pattern, rootPath, include)
-		if err != nil {
-			return nil, false, err
-		}
+		return nil, false, err
 	}
 
 	sort.Slice(matches, func(i, j int) bool {
@@ -266,57 +261,6 @@ func searchFiles(pattern, rootPath, include string, limit int) ([]grepMatch, boo
 	}
 
 	return matches, truncated, nil
-}
-
-func searchWithRipgrep(pattern, path, include string) ([]grepMatch, error) {
-	cmd := fsext.GetRgSearchCmd(pattern, path, include)
-	if cmd == nil {
-		return nil, fmt.Errorf("ripgrep not found in $PATH")
-	}
-
-	output, err := cmd.Output()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return []grepMatch{}, nil
-		}
-		return nil, err
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	matches := make([]grepMatch, 0, len(lines))
-
-	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-
-		// Parse ripgrep output format: file:line:content
-		parts := strings.SplitN(line, ":", 3)
-		if len(parts) < 3 {
-			continue
-		}
-
-		filePath := parts[0]
-		lineNum, err := strconv.Atoi(parts[1])
-		if err != nil {
-			continue
-		}
-		lineText := parts[2]
-
-		fileInfo, err := os.Stat(filePath)
-		if err != nil {
-			continue // Skip files we can't access
-		}
-
-		matches = append(matches, grepMatch{
-			path:     filePath,
-			modTime:  fileInfo.ModTime(),
-			lineNum:  lineNum,
-			lineText: lineText,
-		})
-	}
-
-	return matches, nil
 }
 
 func searchFilesWithRegex(pattern, rootPath, include string) ([]grepMatch, error) {
