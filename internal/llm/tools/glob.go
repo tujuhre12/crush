@@ -43,7 +43,7 @@ LIMITATIONS:
 
 WINDOWS NOTES:
 - Path separators are handled automatically (both / and \ work)
-- Uses ripgrep (rg) command if available, otherwise falls back to built-in Go implementation
+- Uses built-in Go implementation and bmatcuk/doublestar/v4 for globbing
 
 TIPS:
 - Patterns should use forward slashes (/) for cross-platform compatibility

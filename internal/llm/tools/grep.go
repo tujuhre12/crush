@@ -124,8 +124,7 @@ LIMITATIONS:
 - Hidden files (starting with '.') are skipped
 
 CROSS-PLATFORM NOTES:
-- Uses ripgrep (rg) command if available for better performance
-- Falls back to built-in Go implementation if ripgrep is not available
+- Uses built-in Go implementation that is based on regexp
 - File paths are normalized automatically for cross-platform compatibility
 
 TIPS:
