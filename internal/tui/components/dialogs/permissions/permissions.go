@@ -405,6 +405,20 @@ func (p *permissionDialogCmp) generateWriteContent() string {
 }
 
 func (p *permissionDialogCmp) generateFetchContent() string {
+	t := styles.CurrentTheme()
+	baseStyle := t.S().Base.Background(t.BgSubtle)
+	if pr, ok := p.permission.Params.(tools.FetchPermissionsParams); ok {
+		// Show format info instead of duplicating URL
+		content := fmt.Sprintf("Format: %s", pr.Format)
+		if pr.Timeout > 0 {
+			content += fmt.Sprintf("\nTimeout: %d seconds", pr.Timeout)
+		}
+		finalContent := baseStyle.
+			Padding(1, 2).
+			Width(p.contentViewPort.Width()).
+			Render(content)
+		return finalContent
+	}
 	return ""
 }
 
