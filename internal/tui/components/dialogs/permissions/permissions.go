@@ -409,15 +409,6 @@ func (p *permissionDialogCmp) generateWriteContent() string {
 }
 
 func (p *permissionDialogCmp) generateFetchContent() string {
-	t := styles.CurrentTheme()
-	baseStyle := t.S().Base.Background(t.BgSubtle)
-	if pr, ok := p.permission.Params.(tools.FetchPermissionsParams); ok {
-		finalContent := baseStyle.
-			Padding(1, 2).
-			Width(p.contentViewPort.Width()).
-			Render(pr.URL)
-		return finalContent
-	}
 	return ""
 }
 
