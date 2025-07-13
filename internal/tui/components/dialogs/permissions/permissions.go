@@ -283,7 +283,20 @@ func (p *permissionDialogCmp) renderHeader() string {
 			baseStyle.Render(strings.Repeat(" ", p.width)),
 		)
 	case tools.FetchToolName:
-		headerParts = append(headerParts, t.S().Muted.Width(p.width).Bold(true).Render("URL"))
+		if params, ok := p.permission.Params.(tools.FetchPermissionsParams); ok {
+			urlKey := t.S().Muted.Render("URL")
+			urlValue := t.S().Text.
+				Width(p.width - lipgloss.Width(urlKey)).
+				Render(fmt.Sprintf(" %s", params.URL))
+			headerParts = append(headerParts,
+				lipgloss.JoinHorizontal(
+					lipgloss.Left,
+					urlKey,
+					urlValue,
+				),
+				baseStyle.Render(strings.Repeat(" ", p.width)),
+			)
+		}
 	}
 
 	return baseStyle.Render(lipgloss.JoinVertical(lipgloss.Left, headerParts...))
