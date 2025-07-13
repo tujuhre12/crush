@@ -220,9 +220,19 @@ func (p *permissionDialogCmp) renderHeader() string {
 		Render(fmt.Sprintf(" %s", p.permission.ToolName))
 
 	pathKey := t.S().Muted.Render("Path")
+	var pathDisplayValue string
+	if p.permission.ToolName == tools.FetchToolName {
+		if params, ok := p.permission.Params.(tools.FetchPermissionsParams); ok {
+			pathDisplayValue = params.URL
+		} else {
+			pathDisplayValue = p.permission.Path
+		}
+	} else {
+		pathDisplayValue = fsext.PrettyPath(p.permission.Path)
+	}
 	pathValue := t.S().Text.
 		Width(p.width - lipgloss.Width(pathKey)).
-		Render(fmt.Sprintf(" %s", fsext.PrettyPath(p.permission.Path)))
+		Render(fmt.Sprintf(" %s", pathDisplayValue))
 
 	headerParts := []string{
 		lipgloss.JoinHorizontal(
