@@ -220,19 +220,9 @@ func (p *permissionDialogCmp) renderHeader() string {
 		Render(fmt.Sprintf(" %s", p.permission.ToolName))
 
 	pathKey := t.S().Muted.Render("Path")
-	var pathDisplayValue string
-	if p.permission.ToolName == tools.FetchToolName {
-		if params, ok := p.permission.Params.(tools.FetchPermissionsParams); ok {
-			pathDisplayValue = params.URL
-		} else {
-			pathDisplayValue = p.permission.Path
-		}
-	} else {
-		pathDisplayValue = fsext.PrettyPath(p.permission.Path)
-	}
 	pathValue := t.S().Text.
 		Width(p.width - lipgloss.Width(pathKey)).
-		Render(fmt.Sprintf(" %s", pathDisplayValue))
+		Render(fmt.Sprintf(" %s", fsext.PrettyPath(p.permission.Path)))
 
 	headerParts := []string{
 		lipgloss.JoinHorizontal(
@@ -241,12 +231,18 @@ func (p *permissionDialogCmp) renderHeader() string {
 			toolValue,
 		),
 		baseStyle.Render(strings.Repeat(" ", p.width)),
-		lipgloss.JoinHorizontal(
-			lipgloss.Left,
-			pathKey,
-			pathValue,
-		),
-		baseStyle.Render(strings.Repeat(" ", p.width)),
+	}
+
+	// Only show Path field for non-fetch tools
+	if p.permission.ToolName != tools.FetchToolName {
+		headerParts = append(headerParts,
+			lipgloss.JoinHorizontal(
+				lipgloss.Left,
+				pathKey,
+				pathValue,
+			),
+			baseStyle.Render(strings.Repeat(" ", p.width)),
+		)
 	}
 
 	// Add tool-specific header information
