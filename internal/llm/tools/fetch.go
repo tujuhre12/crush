@@ -11,6 +11,7 @@ import (
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/charmbracelet/crush/internal/network"
 	"github.com/charmbracelet/crush/internal/permission"
 )
 
@@ -167,6 +168,9 @@ func (t *fetchTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error
 
 	resp, err := t.client.Do(req)
 	if err != nil {
+		if network.IsOfflineError(err) {
+			return NewTextErrorResponse(network.GetFriendlyOfflineMessage()), nil
+		}
 		return ToolResponse{}, fmt.Errorf("failed to fetch URL: %w", err)
 	}
 	defer resp.Body.Close()
