@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/crush/internal/history"
 	"github.com/charmbracelet/crush/internal/llm/agent"
 	"github.com/charmbracelet/crush/internal/log"
+	"github.com/charmbracelet/crush/internal/notification"
 	"github.com/charmbracelet/crush/internal/pubsub"
 
 	"github.com/charmbracelet/crush/internal/lsp"
@@ -32,6 +33,7 @@ type App struct {
 	Permissions permission.Service
 
 	CoderAgent agent.Service
+	Notifier   *notification.Notifier
 
 	LSPClients map[string]*lsp.Client
 
@@ -60,11 +62,24 @@ func New(ctx context.Context, conn *sql.DB, cfg *config.Config) (*App, error) {
 	files := history.NewService(q, conn)
 	skipPermissionsRequests := cfg.Options != nil && cfg.Options.SkipPermissionsRequests
 
+	// Enable notifications by default, disable if configured
+	enableNotifications := true
+	if cfg.Options != nil && cfg.Options.DisableNotifications {
+		enableNotifications = false
+	}
+	notifier := notification.New(enableNotifications)
+
+	// Test notification on startup (only in debug mode)
+	if cfg.Options != nil && cfg.Options.Debug {
+		notifier.NotifyTaskComplete(ctx, "Crush Started", "Notification system is working")
+	}
+
 	app := &App{
 		Sessions:    sessions,
 		Messages:    messages,
 		History:     files,
 		Permissions: permission.NewPermissionService(cfg.WorkingDir(), skipPermissionsRequests),
+		Notifier:    notifier,
 		LSPClients:  make(map[string]*lsp.Client),
 
 		globalCtx: ctx,
@@ -175,6 +190,25 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 			return ctx.Err()
 		}
 	}
+
+	// Get the text content from the response
+	content := "No content available"
+	if result.Message.Content().String() != "" {
+		content = result.Message.Content().String()
+	}
+
+	out, err := format.FormatOutput(content, outputFormat)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(out)
+	slog.Info("Non-interactive run completed", "session_id", sess.ID)
+
+	// Send completion notification
+	a.Notifier.NotifyTaskComplete(ctx, "Crush Task Complete", "Your task has finished successfully")
+
+	return nil
 }
 
 func (app *App) UpdateAgentModel() error {
@@ -188,6 +222,10 @@ func (app *App) setupEvents() {
 	setupSubscriber(ctx, app.serviceEventsWG, "messages", app.Messages.Subscribe, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "permissions", app.Permissions.Subscribe, app.events)
 	setupSubscriber(ctx, app.serviceEventsWG, "history", app.History.Subscribe, app.events)
+
+	// Setup notification handler for message completion
+	app.setupNotificationHandler(ctx)
+
 	cleanupFunc := func() {
 		cancel()
 		app.serviceEventsWG.Wait()
@@ -224,6 +262,44 @@ func setupSubscriber[T any](
 				}
 			case <-ctx.Done():
 				slog.Debug("subscription cancelled", "name", name)
+				return
+			}
+		}
+	}()
+}
+
+func (app *App) setupNotificationHandler(ctx context.Context) {
+	app.serviceEventsWG.Add(1)
+	go func() {
+		defer app.serviceEventsWG.Done()
+		slog.Debug("Starting notification handler")
+		msgCh := app.Messages.Subscribe(ctx)
+		for {
+			select {
+			case event, ok := <-msgCh:
+				if !ok {
+					slog.Debug("notification handler: message channel closed")
+					return
+				}
+				slog.Debug("Notification handler received event", "type", event.Type, "role", event.Payload.Role, "finished", event.Payload.IsFinished())
+				if event.Type == pubsub.UpdatedEvent {
+					msg := event.Payload
+					if msg.IsFinished() && msg.Role == message.Assistant {
+						slog.Debug("Message finished, sending notification", "session_id", msg.SessionID)
+						// Get session to create a meaningful notification title
+						sess, err := app.Sessions.Get(ctx, msg.SessionID)
+						if err != nil {
+							slog.Debug("Failed to get session for notification", "error", err)
+							continue
+						}
+
+						title := "Crush Task Complete"
+						notificationMsg := fmt.Sprintf("Task completed in session: %s", sess.Title)
+						app.Notifier.NotifyTaskComplete(ctx, title, notificationMsg)
+					}
+				}
+			case <-ctx.Done():
+				slog.Debug("notification handler cancelled")
 				return
 			}
 		}
