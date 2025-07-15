@@ -179,7 +179,7 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// If this is an Ollama model, ensure it's running
 		if msg.Model.Provider == "ollama" {
-			if err := ollama.EnsureModelRunning(context.Background(), msg.Model.Model); err != nil {
+			if err := ollama.EnsureModelLoaded(context.Background(), msg.Model.Model); err != nil {
 				return a, util.ReportError(fmt.Errorf("failed to start Ollama model %s: %v", msg.Model.Model, err))
 			}
 		}

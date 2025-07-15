@@ -90,6 +90,27 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	return cfg, nil
 }
 
+// convertOllamaModels converts ollama.ProviderModel to provider.Model
+func convertOllamaModels(ollamaModels []ollama.ProviderModel) []provider.Model {
+	providerModels := make([]provider.Model, len(ollamaModels))
+	for i, model := range ollamaModels {
+		providerModels[i] = provider.Model{
+			ID:                 model.ID,
+			Model:              model.Model,
+			CostPer1MIn:        model.CostPer1MIn,
+			CostPer1MOut:       model.CostPer1MOut,
+			CostPer1MInCached:  model.CostPer1MInCached,
+			CostPer1MOutCached: model.CostPer1MOutCached,
+			ContextWindow:      model.ContextWindow,
+			DefaultMaxTokens:   model.DefaultMaxTokens,
+			CanReason:          model.CanReason,
+			HasReasoningEffort: model.HasReasoningEffort,
+			SupportsImages:     model.SupportsImages,
+		}
+	}
+	return providerModels
+}
+
 func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, knownProviders []provider.Provider) error {
 	knownProviderNames := make(map[string]bool)
 	for _, p := range knownProviders {
@@ -201,11 +222,11 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 				BaseURL: "http://localhost:11434/v1",
 				Type:    provider.TypeOpenAI,
 				APIKey:  "ollama",
-				Models:  ollamaProvider.Models,
+				Models:  convertOllamaModels(ollamaProvider.Models),
 			}
 		} else {
 			// If Ollama is not running, try to start it
-			if err := ollama.EnsureOllamaRunning(ctx); err == nil {
+			if err := ollama.EnsureRunning(ctx); err == nil {
 				// Now try to get the provider again
 				if ollamaProvider, err := ollama.GetProvider(ctx); err == nil {
 					slog.Debug("Started Ollama service and detected provider", "models", len(ollamaProvider.Models))
@@ -215,7 +236,7 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 						BaseURL: "http://localhost:11434/v1",
 						Type:    provider.TypeOpenAI,
 						APIKey:  "ollama",
-						Models:  ollamaProvider.Models,
+						Models:  convertOllamaModels(ollamaProvider.Models),
 					}
 				} else {
 					slog.Debug("Started Ollama service but failed to get provider", "error", err)
