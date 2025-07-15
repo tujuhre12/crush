@@ -7,7 +7,7 @@ import (
 	"github.com/MakeNowJust/heredoc"
 	"github.com/charmbracelet/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/rivo/uniseg"
 )
 
@@ -53,7 +53,7 @@ func (h *Heartbit) Draw(scr uv.Screen, area uv.Rectangle) {
 				continue
 			}
 			var style uv.Style
-			style.Fg = ansi.IndexedColor(rand.Intn(256))
+			style.Fg = charmtone.Key(rand.Intn(len(charmtone.Keys())))
 			cell := uv.Cell{
 				Style:   style,
 				Content: seg.Str(),

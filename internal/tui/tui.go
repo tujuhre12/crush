@@ -434,6 +434,11 @@ func (a *appModel) View() tea.View {
 		)
 	}
 
+	// Add the heartbit layer on top
+	layers = append(layers,
+		lipgloss.NewLayer(heartbit.Standard()).X(10).Y(3).Z(999),
+	)
+
 	canvas := lipgloss.NewCanvas(
 		layers...,
 	)
