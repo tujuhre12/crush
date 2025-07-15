@@ -28,7 +28,7 @@ func TestStatus(t *testing.T) {
 		{
 			name: "WithCustomIcon",
 			opts: core.StatusOpts{
-				Icon:        "✓",
+				Icon:        "OK",
 				Title:       "Success",
 				Description: "Operation completed successfully",
 			},
@@ -46,7 +46,7 @@ func TestStatus(t *testing.T) {
 		{
 			name: "WithColors",
 			opts: core.StatusOpts{
-				Icon:             "⚠",
+				Icon:             "WARNING",
 				IconColor:        color.RGBA{255, 165, 0, 255}, // Orange
 				Title:            "Warning",
 				TitleColor:       color.RGBA{255, 255, 0, 255}, // Yellow
@@ -101,7 +101,7 @@ func TestStatus(t *testing.T) {
 		{
 			name: "AllFieldsWithExtraContent",
 			opts: core.StatusOpts{
-				Icon:             "🚀",
+				Icon:             "DEPLOY",
 				IconColor:        color.RGBA{0, 255, 0, 255}, // Green
 				Title:            "Deployment",
 				TitleColor:       color.RGBA{0, 0, 255, 255}, // Blue

@@ -8,9 +8,9 @@ func TestIsInstalled(t *testing.T) {
 	installed := IsInstalled()
 
 	if installed {
-		t.Log("✓ Ollama is installed on this system")
+		t.Log("Ollama is installed on this system")
 	} else {
-		t.Log("✗ Ollama is not installed on this system")
+		t.Log("Ollama is not installed on this system")
 	}
 
 	// This test doesn't fail - it's informational

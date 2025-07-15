@@ -17,9 +17,9 @@ func TestIsRunning(t *testing.T) {
 	running := IsRunning(ctx)
 
 	if running {
-		t.Log("✓ Ollama is running")
+		t.Log("Ollama is running")
 	} else {
-		t.Log("✗ Ollama is not running")
+		t.Log("Ollama is not running")
 	}
 
 	// This test doesn't fail - it's informational
@@ -48,7 +48,7 @@ func TestGetModels(t *testing.T) {
 		t.Fatalf("Failed to get models: %v", err)
 	}
 
-	t.Logf("✓ Found %d models:", len(models))
+	t.Logf("Found %d models:", len(models))
 	for _, model := range models {
 		t.Logf("  - %s (context: %d, max_tokens: %d)",
 			model.ID, model.ContextWindow, model.DefaultMaxTokens)
@@ -77,9 +77,9 @@ func TestGetRunningModels(t *testing.T) {
 		t.Fatalf("Failed to get running models: %v", err)
 	}
 
-	t.Logf("✓ Found %d running models:", len(runningModels))
+	t.Logf("Found %d running models:", len(runningModels))
 	for _, model := range runningModels {
-		t.Logf("  - %s (size: %d bytes)", model.Name, model.Size)
+		t.Logf("  - %s", model.Name)
 	}
 }
 
@@ -119,9 +119,9 @@ func TestIsModelLoaded(t *testing.T) {
 	}
 
 	if loaded {
-		t.Logf("✓ Model %s is loaded", testModel)
+		t.Logf("Model %s is loaded", testModel)
 	} else {
-		t.Logf("✗ Model %s is not loaded", testModel)
+		t.Logf("Model %s is not loaded", testModel)
 	}
 }
 
@@ -155,7 +155,7 @@ func TestGetProvider(t *testing.T) {
 		t.Errorf("Expected provider ID to be 'ollama', got '%s'", provider.ID)
 	}
 
-	t.Logf("✓ Provider: %s (ID: %s) with %d models",
+	t.Logf("Provider: %s (ID: %s) with %d models",
 		provider.Name, provider.ID, len(provider.Models))
 }
 

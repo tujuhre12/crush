@@ -5,49 +5,16 @@ import (
 	"sync"
 )
 
-// OllamaModel represents a model returned by Ollama's API
+// OllamaModel represents a model parsed from Ollama CLI output
 type OllamaModel struct {
-	Name       string `json:"name"`
-	Model      string `json:"model"`
-	Size       int64  `json:"size"`
-	ModifiedAt string `json:"modified_at"`
-	Digest     string `json:"digest"`
-	Details    struct {
-		ParentModel       string   `json:"parent_model"`
-		Format            string   `json:"format"`
-		Family            string   `json:"family"`
-		Families          []string `json:"families"`
-		ParameterSize     string   `json:"parameter_size"`
-		QuantizationLevel string   `json:"quantization_level"`
-	} `json:"details"`
-}
-
-// OllamaTagsResponse represents the response from Ollama's /api/tags endpoint
-type OllamaTagsResponse struct {
-	Models []OllamaModel `json:"models"`
+	Name  string
+	Model string
+	Size  int64
 }
 
 // OllamaRunningModel represents a model that is currently loaded in memory
 type OllamaRunningModel struct {
-	Name    string `json:"name"`
-	Model   string `json:"model"`
-	Size    int64  `json:"size"`
-	Digest  string `json:"digest"`
-	Details struct {
-		ParentModel       string   `json:"parent_model"`
-		Format            string   `json:"format"`
-		Family            string   `json:"family"`
-		Families          []string `json:"families"`
-		ParameterSize     string   `json:"parameter_size"`
-		QuantizationLevel string   `json:"quantization_level"`
-	} `json:"details"`
-	ExpiresAt string `json:"expires_at"`
-	SizeVRAM  int64  `json:"size_vram"`
-}
-
-// OllamaRunningModelsResponse represents the response from Ollama's /api/ps endpoint
-type OllamaRunningModelsResponse struct {
-	Models []OllamaRunningModel `json:"models"`
+	Name string
 }
 
 // ProcessManager manages Ollama processes started by Crush

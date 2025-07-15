@@ -2,67 +2,28 @@ package ollama
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
-	"time"
+	"strings"
 
 	"github.com/charmbracelet/crush/internal/fur/provider"
 )
 
-const (
-	defaultOllamaURL = "http://localhost:11434"
-	requestTimeout   = 2 * time.Second
-)
-
-// IsRunning checks if Ollama is running by attempting to connect to its API
+// IsRunning checks if Ollama is running by attempting to run a CLI command
 func IsRunning(ctx context.Context) bool {
-	client := &http.Client{
-		Timeout: requestTimeout,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", defaultOllamaURL+"/api/tags", nil)
-	if err != nil {
-		return false
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK
+	_, err := CLIListModels(ctx)
+	return err == nil
 }
 
-// GetModels retrieves available models from Ollama
+// GetModels retrieves available models from Ollama using CLI
 func GetModels(ctx context.Context) ([]provider.Model, error) {
-	client := &http.Client{
-		Timeout: requestTimeout,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", defaultOllamaURL+"/api/tags", nil)
+	ollamaModels, err := CLIListModels(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Ollama returned status %d", resp.StatusCode)
-	}
-
-	var tagsResponse OllamaTagsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&tagsResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	models := make([]provider.Model, len(tagsResponse.Models))
-	for i, ollamaModel := range tagsResponse.Models {
+	models := make([]provider.Model, len(ollamaModels))
+	for i, ollamaModel := range ollamaModels {
+		family := extractModelFamily(ollamaModel.Name)
 		models[i] = provider.Model{
 			ID:                 ollamaModel.Name,
 			Model:              ollamaModel.Name,
@@ -70,60 +31,37 @@ func GetModels(ctx context.Context) ([]provider.Model, error) {
 			CostPer1MOut:       0,
 			CostPer1MInCached:  0,
 			CostPer1MOutCached: 0,
-			ContextWindow:      getContextWindow(ollamaModel.Details.Family),
+			ContextWindow:      getContextWindow(family),
 			DefaultMaxTokens:   4096,
 			CanReason:          false,
 			HasReasoningEffort: false,
-			SupportsImages:     supportsImages(ollamaModel.Details.Family),
+			SupportsImages:     supportsImages(family),
 		}
 	}
 
 	return models, nil
 }
 
-// GetRunningModels returns models that are currently loaded in memory
+// GetRunningModels returns models that are currently loaded in memory using CLI
 func GetRunningModels(ctx context.Context) ([]OllamaRunningModel, error) {
-	client := &http.Client{
-		Timeout: requestTimeout,
-	}
-
-	req, err := http.NewRequestWithContext(ctx, "GET", defaultOllamaURL+"/api/ps", nil)
+	runningModelNames, err := CLIListRunningModels(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, err
 	}
 
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to Ollama: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Ollama returned status %d", resp.StatusCode)
+	var runningModels []OllamaRunningModel
+	for _, name := range runningModelNames {
+		runningModels = append(runningModels, OllamaRunningModel{
+			Name: name,
+		})
 	}
 
-	var psResponse OllamaRunningModelsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&psResponse); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return psResponse.Models, nil
+	return runningModels, nil
 }
 
-// IsModelLoaded checks if a specific model is currently loaded in memory
+// IsModelLoaded checks if a specific model is currently loaded in memory using CLI
 func IsModelLoaded(ctx context.Context, modelName string) (bool, error) {
-	runningModels, err := GetRunningModels(ctx)
-	if err != nil {
-		return false, err
-	}
-
-	for _, model := range runningModels {
-		if model.Name == modelName {
-			return true, nil
-		}
-	}
-
-	return false, nil
+	return CLIIsModelRunning(ctx, modelName)
 }
 
 // GetProvider returns a provider.Provider for Ollama if it's running
@@ -142,6 +80,41 @@ func GetProvider(ctx context.Context) (*provider.Provider, error) {
 		ID:     "ollama",
 		Models: models,
 	}, nil
+}
+
+// extractModelFamily extracts the model family from a model name
+func extractModelFamily(modelName string) string {
+	// Extract the family from model names like "llama3.2:3b" -> "llama"
+	parts := strings.Split(modelName, ":")
+	if len(parts) > 0 {
+		name := parts[0]
+		// Handle cases like "llama3.2" -> "llama"
+		if strings.HasPrefix(name, "llama") {
+			return "llama"
+		}
+		if strings.HasPrefix(name, "mistral") {
+			return "mistral"
+		}
+		if strings.HasPrefix(name, "gemma") {
+			return "gemma"
+		}
+		if strings.HasPrefix(name, "qwen") {
+			return "qwen"
+		}
+		if strings.HasPrefix(name, "phi") {
+			return "phi"
+		}
+		if strings.HasPrefix(name, "codellama") {
+			return "codellama"
+		}
+		if strings.Contains(name, "llava") {
+			return "llava"
+		}
+		if strings.Contains(name, "vision") {
+			return "llama-vision"
+		}
+	}
+	return "unknown"
 }
 
 // getContextWindow returns an estimated context window based on model family

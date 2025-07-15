@@ -1,6 +1,7 @@
 package ollama
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -29,13 +30,24 @@ func cleanupProcesses() {
 	processManager.mu.Lock()
 	defer processManager.mu.Unlock()
 
-	// Clean up model processes
-	for modelName, cmd := range processManager.processes {
-		if cmd.Process != nil {
-			cmd.Process.Kill()
-			cmd.Wait() // Wait for the process to actually exit
+	// Use CLI approach to stop all running models
+	// This is more reliable than tracking individual processes
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := CLIStopAllModels(ctx); err != nil {
+		// If CLI approach fails, fall back to process tracking
+		// Clean up model processes
+		for modelName, cmd := range processManager.processes {
+			if cmd.Process != nil {
+				cmd.Process.Kill()
+				cmd.Wait() // Wait for the process to actually exit
+			}
+			delete(processManager.processes, modelName)
 		}
-		delete(processManager.processes, modelName)
+	} else {
+		// CLI approach succeeded, clear our process tracking
+		processManager.processes = make(map[string]*exec.Cmd)
 	}
 
 	// Clean up Ollama server if Crush started it

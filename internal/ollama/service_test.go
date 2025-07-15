@@ -16,7 +16,7 @@ func TestStartOllamaService(t *testing.T) {
 
 	// First check if it's already running
 	if IsRunning(ctx) {
-		t.Log("✓ Ollama is already running, skipping start test")
+		t.Log("Ollama is already running, skipping start test")
 		return
 	}
 
@@ -31,7 +31,7 @@ func TestStartOllamaService(t *testing.T) {
 		t.Fatal("Ollama service was started but IsRunning still returns false")
 	}
 
-	t.Log("✓ Ollama service started successfully")
+	t.Log("Ollama service started successfully")
 
 	// Clean up - stop the service we started
 	cleanupProcesses()
@@ -56,7 +56,7 @@ func TestEnsureOllamaRunning(t *testing.T) {
 		t.Fatal("EnsureOllamaRunning succeeded but Ollama is not running")
 	}
 
-	t.Log("✓ EnsureOllamaRunning succeeded")
+	t.Log("EnsureOllamaRunning succeeded")
 
 	// Test calling it again when already running
 	err = EnsureOllamaRunning(ctx)
@@ -64,7 +64,7 @@ func TestEnsureOllamaRunning(t *testing.T) {
 		t.Fatalf("EnsureOllamaRunning failed on second call: %v", err)
 	}
 
-	t.Log("✓ EnsureOllamaRunning works when already running")
+	t.Log("EnsureOllamaRunning works when already running")
 }
 
 func TestStartModel(t *testing.T) {
@@ -112,7 +112,7 @@ func TestStartModel(t *testing.T) {
 	}
 
 	if loaded {
-		t.Log("✓ Model is already loaded, skipping start test")
+		t.Log("Model is already loaded, skipping start test")
 		return
 	}
 
@@ -132,7 +132,7 @@ func TestStartModel(t *testing.T) {
 		t.Fatal("StartModel succeeded but model is not loaded")
 	}
 
-	t.Log("✓ Model started successfully")
+	t.Log("Model started successfully")
 }
 
 func TestEnsureModelRunning(t *testing.T) {
@@ -181,7 +181,7 @@ func TestEnsureModelRunning(t *testing.T) {
 		t.Fatal("EnsureModelRunning succeeded but model is not loaded")
 	}
 
-	t.Log("✓ EnsureModelRunning succeeded")
+	t.Log("EnsureModelRunning succeeded")
 
 	// Test calling it again when already running
 	err = EnsureModelRunning(ctx, testModel)
@@ -189,5 +189,5 @@ func TestEnsureModelRunning(t *testing.T) {
 		t.Fatalf("EnsureModelRunning failed on second call: %v", err)
 	}
 
-	t.Log("✓ EnsureModelRunning works when model already running")
+	t.Log("EnsureModelRunning works when model already running")
 }

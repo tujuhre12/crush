@@ -20,7 +20,7 @@ func TestProcessManager(t *testing.T) {
 		t.Fatal("processManager.processes is nil")
 	}
 
-	t.Log("✓ ProcessManager is properly initialized")
+	t.Log("ProcessManager is properly initialized")
 }
 
 func TestCleanupProcesses(t *testing.T) {
@@ -55,10 +55,10 @@ func TestCleanupProcesses(t *testing.T) {
 		if IsRunning(ctx) {
 			t.Error("Ollama service is still running after cleanup")
 		} else {
-			t.Log("✓ Cleanup successfully stopped Ollama service")
+			t.Log("Cleanup successfully stopped Ollama service")
 		}
 	} else {
-		t.Log("✓ Ollama was already running, skipping cleanup test to avoid disruption")
+		t.Log("Ollama was already running, skipping cleanup test to avoid disruption")
 	}
 }
 
@@ -75,7 +75,7 @@ func TestSetupProcessCleanup(t *testing.T) {
 	setupProcessCleanup()
 	setupProcessCleanup() // Should be safe due to sync.Once
 
-	t.Log("✓ setupProcessCleanup completed without panic")
+	t.Log("setupProcessCleanup completed without panic")
 }
 
 func TestProcessManagerThreadSafety(t *testing.T) {
@@ -106,5 +106,5 @@ func TestProcessManagerThreadSafety(t *testing.T) {
 		}
 	}
 
-	t.Log("✓ ProcessManager thread safety test passed")
+	t.Log("ProcessManager thread safety test passed")
 }
