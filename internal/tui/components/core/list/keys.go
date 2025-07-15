@@ -53,7 +53,7 @@ func DefaultKeyMap() KeyMap {
 		),
 		Home: key.NewBinding(
 			key.WithKeys("g", "home"),
-			key.WithHelp("g/home", "top"),
+			key.WithHelp("g/home", "home"),
 		),
 		End: key.NewBinding(
 			key.WithKeys("G", "end"),

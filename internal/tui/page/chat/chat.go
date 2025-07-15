@@ -761,11 +761,11 @@ func (a *chatPage) Help() help.KeyMap {
 					),
 					key.NewBinding(
 						key.WithKeys("g", "home"),
-						key.WithHelp("g", "hone"),
+						key.WithHelp("g/home", "home"),
 					),
 					key.NewBinding(
 						key.WithKeys("G", "end"),
-						key.WithHelp("G", "end"),
+						key.WithHelp("G/end", "end"),
 					),
 				},
 			)
