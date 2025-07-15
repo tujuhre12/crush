@@ -448,7 +448,7 @@ func (a *appModel) View() tea.View {
 	var view tea.View
 	t := styles.CurrentTheme()
 	view.Layer = scr
-	view.BackgroundColor = t.BgBase()
+	view.BackgroundColor = t.BgBase
 	view.Cursor = cursor
 	return view
 }
