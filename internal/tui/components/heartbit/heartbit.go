@@ -1,7 +1,6 @@
 package heartbit
 
 import (
-	"math/rand"
 	"strings"
 
 	"github.com/MakeNowJust/heredoc"
@@ -44,6 +43,7 @@ func (h *Heartbit) Height() int {
 }
 
 func (h *Heartbit) Draw(scr uv.Screen, area uv.Rectangle) {
+	grad := charmtone.Blend(h.Width(), charmtone.Tuna, charmtone.Blush)
 	for y, line := range strings.Split(h.face, "\n") {
 		seg := uniseg.NewGraphemes(line)
 		var x int
@@ -53,7 +53,7 @@ func (h *Heartbit) Draw(scr uv.Screen, area uv.Rectangle) {
 				continue
 			}
 			var style uv.Style
-			style.Fg = charmtone.Key(rand.Intn(len(charmtone.Keys())))
+			style.Fg = grad[x]
 			cell := uv.Cell{
 				Style:   style,
 				Content: seg.Str(),
