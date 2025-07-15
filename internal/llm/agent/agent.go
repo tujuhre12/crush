@@ -168,7 +168,7 @@ func NewAgent(
 		}
 	}
 	smallModel := cfg.GetModelByType(config.SelectedModelTypeSmall)
-	if smallModel.ID == "" {
+	if smallModel == nil {
 		return nil, fmt.Errorf("model %s not found in provider %s", smallModelCfg.Model, smallModelProviderCfg.ID)
 	}
 
@@ -817,6 +817,9 @@ func (a *agent) UpdateModel() error {
 
 	// Get current provider configuration
 	currentProviderCfg := cfg.GetProviderForModel(a.agentCfg.Model)
+	if currentProviderCfg == nil {
+		return fmt.Errorf("provider configuration for agent %s not found in config", a.agentCfg.Name)
+	}
 	if currentProviderCfg.ID == "" {
 		return fmt.Errorf("provider for agent %s not found in config", a.agentCfg.Name)
 	}
@@ -825,7 +828,7 @@ func (a *agent) UpdateModel() error {
 	if string(currentProviderCfg.ID) != a.providerID {
 		// Provider changed, need to recreate the main provider
 		model := cfg.GetModelByType(a.agentCfg.Model)
-		if model.ID == "" {
+		if model == nil {
 			return fmt.Errorf("model not found for agent %s", a.agentCfg.Name)
 		}
 

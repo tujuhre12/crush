@@ -152,6 +152,30 @@ func (m *ModelListComponent) SetModelType(modelType int) tea.Cmd {
 		}
 	}
 
+	// Add Ollama provider if it's configured (auto-detected at config load)
+	if ollamaConfig, exists := cfg.Providers["ollama"]; exists && !ollamaConfig.Disable {
+		// Convert to provider.Provider for consistency
+		ollamaProvider := provider.Provider{
+			Name:   ollamaConfig.Name,
+			ID:     provider.InferenceProvider(ollamaConfig.ID),
+			Models: ollamaConfig.Models,
+		}
+
+		section := commands.NewItemSection("Ollama")
+		section.SetInfo("Ollama")
+		modelItems = append(modelItems, section)
+
+		for _, model := range ollamaProvider.Models {
+			modelItems = append(modelItems, completions.NewCompletionItem(model.Model, ModelOption{
+				Provider: ollamaProvider,
+				Model:    model,
+			}))
+			if model.ID == currentModel.Model && "ollama" == currentModel.Provider {
+				selectIndex = len(modelItems) - 1
+			}
+		}
+	}
+
 	// Then add the known providers from the predefined list
 	for _, provider := range m.providers {
 		// Skip if we already added this provider as an unknown provider

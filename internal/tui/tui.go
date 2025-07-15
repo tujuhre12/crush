@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/llm/agent"
+	"github.com/charmbracelet/crush/internal/ollama"
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	cmpChat "github.com/charmbracelet/crush/internal/tui/components/chat"
@@ -175,6 +176,13 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Model Switch
 	case models.ModelSelectedMsg:
 		config.Get().UpdatePreferredModel(msg.ModelType, msg.Model)
+
+		// If this is an Ollama model, ensure it's running
+		if msg.Model.Provider == "ollama" {
+			if err := ollama.EnsureModelRunning(context.Background(), msg.Model.Model); err != nil {
+				return a, util.ReportError(fmt.Errorf("failed to start Ollama model %s: %v", msg.Model.Model, err))
+			}
+		}
 
 		// Update the agent with the new model/provider configuration
 		if err := a.app.UpdateAgentModel(); err != nil {

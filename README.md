@@ -105,6 +105,55 @@ Crush supports all OpenAI-compatible APIs. Here's an example configuration for D
 }
 ```
 
+### Local AI Model Providers
+
+Crush is compatible with local AI model applications that implement OpenAI's API standard. This includes popular tools like Ollama, LM Studio, LocalAI, Jan.ai, and many others. Running models locally gives you complete privacy and control over your AI infrastructure.
+
+#### Ollama
+
+[Ollama](https://ollama.com) is a popular tool for running AI models locally. It packages models with all dependencies, making deployment simple and reliable.
+
+**Installation:**
+```bash
+# Install Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+
+# Download and run a model
+ollama run llama3.2:3b
+```
+
+**Auto-Discovery:**
+Crush automatically detects Ollama installations and discovers available models without any configuration needed. Simply install Ollama and pull models - they'll appear in the model switcher automatically.
+
+**Manual Configuration (Optional):**
+For advanced use cases or custom configurations, you can manually define Ollama providers:
+
+```json
+{
+  "providers": {
+    "ollama": {
+      "type": "openai",
+      "base_url": "http://localhost:11434/v1",
+      "api_key": "ollama",
+      "models": [
+        {
+          "id": "llama3.2:3b",
+          "model": "Llama 3.2 3B",
+          "context_window": 131072,
+          "default_max_tokens": 4096,
+          "cost_per_1m_in": 0,
+          "cost_per_1m_out": 0
+        }
+      ]
+    }
+  }
+}
+```
+
+#### Other Local AI Tools
+
+For other local AI applications (LM Studio, LocalAI, Jan.ai, etc.), you can configure them manually using the OpenAI-compatible API format shown above.
+
 ## Whatcha think?
 
 We’d love to hear your thoughts on this project. Feel free to drop us a note!
