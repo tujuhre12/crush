@@ -18,12 +18,12 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("enter", "confirm"),
 		),
 		Next: key.NewBinding(
-			key.WithKeys("down", "ctrl+n"),
-			key.WithHelp("↓", "next item"),
+			key.WithKeys("down"),
+			key.WithHelp("↓", "down"),
 		),
 		Previous: key.NewBinding(
-			key.WithKeys("up", "ctrl+p"),
-			key.WithHelp("↑", "previous item"),
+			key.WithKeys("up"),
+			key.WithHelp("↑", "up"),
 		),
 		Close: key.NewBinding(
 			key.WithKeys("esc"),

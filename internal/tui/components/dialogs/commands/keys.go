@@ -20,11 +20,11 @@ func DefaultCommandsDialogKeyMap() CommandsDialogKeyMap {
 		),
 		Next: key.NewBinding(
 			key.WithKeys("down"),
-			key.WithHelp("↓", "move down"),
+			key.WithHelp("↓", "down"),
 		),
 		Previous: key.NewBinding(
 			key.WithKeys("up"),
-			key.WithHelp("↑", "move up"),
+			key.WithHelp("↑", "up"),
 		),
 		Tab: key.NewBinding(
 			key.WithKeys("tab"),
