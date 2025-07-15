@@ -112,10 +112,21 @@ func (br baseRenderer) unmarshalParams(input string, target any) error {
 }
 
 // makeHeader builds the tool call header with status icon and parameters for a nested tool call.
-func (br baseRenderer) makeNestedHeader(_ *toolCallCmp, tool string, width int, params ...string) string {
+func (br baseRenderer) makeNestedHeader(v *toolCallCmp, tool string, width int, params ...string) string {
 	t := styles.CurrentTheme()
+	icon := t.S().Base.Foreground(t.GreenDark).Render(styles.ToolPending)
+	if v.result.ToolCallID != "" {
+		if v.result.IsError {
+			icon = t.S().Base.Foreground(t.RedDark).Render(styles.ToolError)
+		} else {
+			icon = t.S().Base.Foreground(t.Green).Render(styles.ToolSuccess)
+		}
+	} else if v.cancelled {
+		icon = t.S().Muted.Render(styles.ToolPending)
+	}
 	tool = t.S().Base.Foreground(t.FgHalfMuted).Render(tool) + " "
-	return tool + renderParamList(true, width-lipgloss.Width(tool), params...)
+	prefix := fmt.Sprintf("%s %s ", icon, tool)
+	return prefix + renderParamList(true, width-lipgloss.Width(tool), params...)
 }
 
 // makeHeader builds "<Tool>: param (key=value)" and truncates as needed.
@@ -196,6 +207,7 @@ func (br bashRenderer) Render(v *toolCallCmp) string {
 	}
 
 	cmd := strings.ReplaceAll(params.Command, "\n", " ")
+	cmd = strings.ReplaceAll(cmd, "\t", "    ")
 	args := newParamBuilder().addMain(cmd).build()
 
 	return br.renderWithParams(v, "Bash", args, func() string {
@@ -542,7 +554,7 @@ func (tr agentRenderer) Render(v *toolCallCmp) string {
 
 	if v.result.ToolCallID == "" {
 		v.spinning = true
-		parts = append(parts, v.anim.View())
+		parts = append(parts, "", v.anim.View())
 	} else {
 		v.spinning = false
 	}
@@ -567,8 +579,8 @@ func renderParamList(nested bool, paramsWidth int, params ...string) string {
 		return ""
 	}
 	mainParam := params[0]
-	if len(mainParam) > paramsWidth {
-		mainParam = mainParam[:paramsWidth-3] + "…"
+	if paramsWidth >= 0 && lipgloss.Width(mainParam) > paramsWidth {
+		mainParam = ansi.Truncate(mainParam, paramsWidth, "…")
 	}
 
 	if len(params) == 1 {
@@ -621,9 +633,9 @@ func earlyState(header string, v *toolCallCmp) (string, bool) {
 	case v.result.IsError:
 		message = v.renderToolError()
 	case v.cancelled:
-		message = t.S().Base.Padding(0, 1).Background(t.Border).Render("Cancelled")
+		message = t.S().Base.Foreground(t.FgSubtle).Render("Canceled.")
 	case v.result.ToolCallID == "":
-		message = t.S().Base.Padding(0, 1).Background(t.Accent).Foreground(t.FgSubtle).Render("Waiting for tool to start...")
+		message = t.S().Base.Foreground(t.FgSubtle).Render("Waiting for tool to start...")
 	default:
 		return "", false
 	}
@@ -634,8 +646,11 @@ func earlyState(header string, v *toolCallCmp) (string, bool) {
 
 func joinHeaderBody(header, body string) string {
 	t := styles.CurrentTheme()
+	if body == "" {
+		return header
+	}
 	body = t.S().Base.PaddingLeft(2).Render(body)
-	return lipgloss.JoinVertical(lipgloss.Left, header, "", body, "")
+	return lipgloss.JoinVertical(lipgloss.Left, header, "", body)
 }
 
 func renderPlainContent(v *toolCallCmp, content string) string {

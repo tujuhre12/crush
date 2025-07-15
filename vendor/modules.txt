@@ -242,7 +242,7 @@ github.com/bmatcuk/doublestar/v4
 github.com/charlievieth/fastwalk
 github.com/charlievieth/fastwalk/internal/dirent
 github.com/charlievieth/fastwalk/internal/fmtdirent
-# github.com/charmbracelet/bubbles/v2 v2.0.0-beta.1.0.20250607113720-eb5e1cf3b09e
+# github.com/charmbracelet/bubbles/v2 v2.0.0-beta.1.0.20250710161907-a4c42b579198
 ## explicit; go 1.23.0
 github.com/charmbracelet/bubbles/v2/cursor
 github.com/charmbracelet/bubbles/v2/filepicker
@@ -254,14 +254,14 @@ github.com/charmbracelet/bubbles/v2/spinner
 github.com/charmbracelet/bubbles/v2/textarea
 github.com/charmbracelet/bubbles/v2/textinput
 github.com/charmbracelet/bubbles/v2/viewport
-# github.com/charmbracelet/bubbletea/v2 v2.0.0-beta.1 => github.com/charmbracelet/bubbletea-internal/v2 v2.0.0-20250708152737-144080f3d891
-## explicit; go 1.24.3
+# github.com/charmbracelet/bubbletea/v2 v2.0.0-beta.1 => github.com/charmbracelet/bubbletea-internal/v2 v2.0.0-20250710185017-3c0ffd25e595
+## explicit; go 1.24.0
 github.com/charmbracelet/bubbletea/v2
 # github.com/charmbracelet/colorprofile v0.3.1
 ## explicit; go 1.23.0
 github.com/charmbracelet/colorprofile
-# github.com/charmbracelet/fang v0.1.0
-## explicit; go 1.23.0
+# github.com/charmbracelet/fang v0.3.1-0.20250711140230-d5ebb8c1d674
+## explicit; go 1.24.0
 github.com/charmbracelet/fang
 # github.com/charmbracelet/glamour/v2 v2.0.0-20250516160903-6f1e2c8f9ebe
 ## explicit; go 1.23.0
@@ -269,7 +269,7 @@ github.com/charmbracelet/glamour/v2
 github.com/charmbracelet/glamour/v2/ansi
 github.com/charmbracelet/glamour/v2/internal/autolink
 github.com/charmbracelet/glamour/v2/styles
-# github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.2.0.20250703152125-8e1c474f8a71 => github.com/charmbracelet/lipgloss-internal/v2 v2.0.0-20250708152830-0fa4ef151093
+# github.com/charmbracelet/lipgloss/v2 v2.0.0-beta.3 => github.com/charmbracelet/lipgloss-internal/v2 v2.0.0-20250710185058-03664cb9cecb
 ## explicit; go 1.24.2
 github.com/charmbracelet/lipgloss/v2
 github.com/charmbracelet/lipgloss/v2/table
@@ -288,7 +288,7 @@ github.com/charmbracelet/x/ansi/parser
 # github.com/charmbracelet/x/cellbuf v0.0.14-0.20250516160309-24eee56f89fa
 ## explicit; go 1.23.0
 github.com/charmbracelet/x/cellbuf
-# github.com/charmbracelet/x/exp/charmtone v0.0.0-20250627134340-c144409e381c
+# github.com/charmbracelet/x/exp/charmtone v0.0.0-20250708181618-a60a724ba6c3
 ## explicit; go 1.23.0
 github.com/charmbracelet/x/exp/charmtone
 # github.com/charmbracelet/x/exp/golden v0.0.0-20250207160936-21c02780d27a
@@ -403,7 +403,7 @@ github.com/kylelemons/godebug/pretty
 # github.com/lucasb-eyer/go-colorful v1.2.0
 ## explicit; go 1.12
 github.com/lucasb-eyer/go-colorful
-# github.com/mark3labs/mcp-go v0.32.0
+# github.com/mark3labs/mcp-go v0.33.0
 ## explicit; go 1.23
 github.com/mark3labs/mcp-go/client
 github.com/mark3labs/mcp-go/client/transport
@@ -838,5 +838,5 @@ mvdan.cc/sh/v3/fileutil
 mvdan.cc/sh/v3/interp
 mvdan.cc/sh/v3/pattern
 mvdan.cc/sh/v3/syntax
-# github.com/charmbracelet/bubbletea/v2 => github.com/charmbracelet/bubbletea-internal/v2 v2.0.0-20250708152737-144080f3d891
-# github.com/charmbracelet/lipgloss/v2 => github.com/charmbracelet/lipgloss-internal/v2 v2.0.0-20250708152830-0fa4ef151093
+# github.com/charmbracelet/bubbletea/v2 => github.com/charmbracelet/bubbletea-internal/v2 v2.0.0-20250710185017-3c0ffd25e595
+# github.com/charmbracelet/lipgloss/v2 => github.com/charmbracelet/lipgloss-internal/v2 v2.0.0-20250710185058-03664cb9cecb

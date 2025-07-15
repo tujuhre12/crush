@@ -6,17 +6,14 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
-	"github.com/charmbracelet/crush/internal/format"
 	"github.com/charmbracelet/crush/internal/llm/agent"
 	"github.com/charmbracelet/crush/internal/log"
-	"github.com/charmbracelet/crush/internal/pubsub"
 	"github.com/charmbracelet/crush/internal/tui"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/fang"
@@ -54,13 +51,7 @@ to assist developers in writing, debugging, and understanding code directly from
 		debug, _ := cmd.Flags().GetBool("debug")
 		cwd, _ := cmd.Flags().GetString("cwd")
 		prompt, _ := cmd.Flags().GetString("prompt")
-		outputFormat, _ := cmd.Flags().GetString("output-format")
 		quiet, _ := cmd.Flags().GetBool("quiet")
-
-		// Validate format option
-		if !format.IsValid(outputFormat) {
-			return fmt.Errorf("invalid format option: %s\n%s", outputFormat, format.GetHelpText())
-		}
 
 		if cwd != "" {
 			err := os.Chdir(cwd)
@@ -81,9 +72,7 @@ to assist developers in writing, debugging, and understanding code directly from
 			return err
 		}
 
-		// Create main context for the application
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
+		ctx := cmd.Context()
 
 		// Connect DB, this will also run migrations
 		conn, err := db.Connect(ctx, cfg.Options.DataDirectory)
@@ -111,7 +100,7 @@ to assist developers in writing, debugging, and understanding code directly from
 		// Non-interactive mode
 		if prompt != "" {
 			// Run non-interactive flow using the App method
-			return app.RunNonInteractive(ctx, prompt, outputFormat, quiet)
+			return app.RunNonInteractive(ctx, prompt, quiet)
 		}
 
 		// Set up the TUI
@@ -124,74 +113,15 @@ to assist developers in writing, debugging, and understanding code directly from
 			tea.WithFilter(tui.MouseEventFilter), // Filter mouse events based on focus state
 		)
 
-		// Setup the subscriptions, this will send services events to the TUI
-		ch, cancelSubs := setupSubscriptions(app, ctx)
+		go app.Subscribe(program)
 
-		// Create a context for the TUI message handler
-		tuiCtx, tuiCancel := context.WithCancel(ctx)
-		var tuiWg sync.WaitGroup
-		tuiWg.Add(1)
-
-		// Set up message handling for the TUI
-		go func() {
-			defer tuiWg.Done()
-			defer log.RecoverPanic("TUI-message-handler", func() {
-				attemptTUIRecovery(program)
-			})
-
-			for {
-				select {
-				case <-tuiCtx.Done():
-					slog.Info("TUI message handler shutting down")
-					return
-				case msg, ok := <-ch:
-					if !ok {
-						slog.Info("TUI message channel closed")
-						return
-					}
-					program.Send(msg)
-				}
-			}
-		}()
-
-		// Cleanup function for when the program exits
-		cleanup := func() {
-			// Shutdown the app
-			app.Shutdown()
-
-			// Cancel subscriptions first
-			cancelSubs()
-
-			// Then cancel TUI message handler
-			tuiCancel()
-
-			// Wait for TUI message handler to finish
-			tuiWg.Wait()
-
-			slog.Info("All goroutines cleaned up")
-		}
-
-		// Run the TUI
-		result, err := program.Run()
-		cleanup()
-
-		if err != nil {
+		if _, err := program.Run(); err != nil {
 			slog.Error(fmt.Sprintf("TUI run error: %v", err))
 			return fmt.Errorf("TUI error: %v", err)
 		}
-
-		slog.Info(fmt.Sprintf("TUI exited with result: %v", result))
+		app.Shutdown()
 		return nil
 	},
-}
-
-// attemptTUIRecovery tries to recover the TUI after a panic
-func attemptTUIRecovery(program *tea.Program) {
-	slog.Info("Attempting to recover TUI after panic")
-
-	// We could try to restart the TUI or gracefully exit
-	// For now, we'll just quit the program to avoid further issues
-	program.Quit()
 }
 
 func initMCPTools(ctx context.Context, app *app.App, cfg *config.Config) {
@@ -208,86 +138,12 @@ func initMCPTools(ctx context.Context, app *app.App, cfg *config.Config) {
 	}()
 }
 
-func setupSubscriber[T any](
-	ctx context.Context,
-	wg *sync.WaitGroup,
-	name string,
-	subscriber func(context.Context) <-chan pubsub.Event[T],
-	outputCh chan<- tea.Msg,
-) {
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer log.RecoverPanic(fmt.Sprintf("subscription-%s", name), nil)
-
-		subCh := subscriber(ctx)
-
-		for {
-			select {
-			case event, ok := <-subCh:
-				if !ok {
-					slog.Info("subscription channel closed", "name", name)
-					return
-				}
-
-				var msg tea.Msg = event
-
-				select {
-				case outputCh <- msg:
-				case <-time.After(2 * time.Second):
-					slog.Warn("message dropped due to slow consumer", "name", name)
-				case <-ctx.Done():
-					slog.Info("subscription cancelled", "name", name)
-					return
-				}
-			case <-ctx.Done():
-				slog.Info("subscription cancelled", "name", name)
-				return
-			}
-		}
-	}()
-}
-
-func setupSubscriptions(app *app.App, parentCtx context.Context) (chan tea.Msg, func()) {
-	ch := make(chan tea.Msg, 100)
-
-	wg := sync.WaitGroup{}
-	ctx, cancel := context.WithCancel(parentCtx) // Inherit from parent context
-
-	setupSubscriber(ctx, &wg, "sessions", app.Sessions.Subscribe, ch)
-	setupSubscriber(ctx, &wg, "messages", app.Messages.Subscribe, ch)
-	setupSubscriber(ctx, &wg, "permissions", app.Permissions.Subscribe, ch)
-	setupSubscriber(ctx, &wg, "coderAgent", app.CoderAgent.Subscribe, ch)
-	setupSubscriber(ctx, &wg, "history", app.History.Subscribe, ch)
-
-	cleanupFunc := func() {
-		slog.Info("Cancelling all subscriptions")
-		cancel() // Signal all goroutines to stop
-
-		waitCh := make(chan struct{})
-		go func() {
-			defer log.RecoverPanic("subscription-cleanup", nil)
-			wg.Wait()
-			close(waitCh)
-		}()
-
-		select {
-		case <-waitCh:
-			slog.Info("All subscription goroutines completed successfully")
-			close(ch) // Only close after all writers are confirmed done
-		case <-time.After(5 * time.Second):
-			slog.Warn("Timed out waiting for some subscription goroutines to complete")
-			close(ch)
-		}
-	}
-	return ch, cleanupFunc
-}
-
 func Execute() {
 	if err := fang.Execute(
 		context.Background(),
 		rootCmd,
 		fang.WithVersion(version.Version),
+		fang.WithNotifySignal(os.Interrupt),
 	); err != nil {
 		os.Exit(1)
 	}
@@ -300,17 +156,8 @@ func init() {
 	rootCmd.Flags().BoolP("debug", "d", false, "Debug")
 	rootCmd.Flags().StringP("prompt", "p", "", "Prompt to run in non-interactive mode")
 
-	// Add format flag with validation logic
-	rootCmd.Flags().StringP("output-format", "f", format.Text.String(),
-		"Output format for non-interactive mode (text, json)")
-
 	// Add quiet flag to hide spinner in non-interactive mode
 	rootCmd.Flags().BoolP("quiet", "q", false, "Hide spinner in non-interactive mode")
-
-	// Register custom validation for the format flag
-	rootCmd.RegisterFlagCompletionFunc("output-format", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		return format.SupportedFormats, cobra.ShellCompDirectiveNoFileComp
-	})
 }
 
 func maybePrependStdin(prompt string) (string, error) {

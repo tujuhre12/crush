@@ -18,6 +18,7 @@ import (
 	"github.com/charmbracelet/crush/internal/session"
 	"github.com/charmbracelet/crush/internal/tui/components/chat"
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
+	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/filepicker"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/quit"
@@ -25,6 +26,18 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/util"
 	"github.com/charmbracelet/lipgloss/v2"
 )
+
+type Editor interface {
+	util.Model
+	layout.Sizeable
+	layout.Focusable
+	layout.Help
+	layout.Positional
+
+	SetSession(session session.Session) tea.Cmd
+	IsCompletionsOpen() bool
+	Cursor() *tea.Cursor
+}
 
 type FileCompletionItem struct {
 	Path string // The file path
@@ -67,7 +80,11 @@ const (
 	maxAttachments = 5
 )
 
-func (m *editorCmp) openEditor() tea.Cmd {
+type openEditorMsg struct {
+	Text string
+}
+
+func (m *editorCmp) openEditor(value string) tea.Cmd {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		// Use platform-appropriate default editor
@@ -82,7 +99,10 @@ func (m *editorCmp) openEditor() tea.Cmd {
 	if err != nil {
 		return util.ReportError(err)
 	}
-	tmpfile.Close()
+	defer tmpfile.Close() //nolint:errcheck
+	if _, err := tmpfile.WriteString(value); err != nil {
+		return util.ReportError(err)
+	}
 	c := exec.Command(editor, tmpfile.Name())
 	c.Stdin = os.Stdin
 	c.Stdout = os.Stdout
@@ -99,11 +119,8 @@ func (m *editorCmp) openEditor() tea.Cmd {
 			return util.ReportWarn("Message is empty")
 		}
 		os.Remove(tmpfile.Name())
-		attachments := m.attachments
-		m.attachments = nil
-		return chat.SendMsg{
-			Text:        string(content),
-			Attachments: attachments,
+		return openEditorMsg{
+			Text: strings.TrimSpace(string(content)),
 		}
 	})
 }
@@ -145,11 +162,6 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 	switch msg := msg.(type) {
-	case chat.SessionSelectedMsg:
-		if msg.ID != m.session.ID {
-			m.session = msg
-		}
-		return m, nil
 	case filepicker.FilePickedMsg:
 		if len(m.attachments) >= maxAttachments {
 			return m, util.ReportError(fmt.Errorf("cannot add more than %d images", maxAttachments))
@@ -178,6 +190,9 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.completionsStartIndex = 0
 			return m, nil
 		}
+	case openEditorMsg:
+		m.textarea.SetValue(msg.Text)
+		m.textarea.MoveToEnd()
 	case tea.KeyPressMsg:
 		switch {
 		// Completions
@@ -239,19 +254,21 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.app.CoderAgent.IsSessionBusy(m.session.ID) {
 				return m, util.ReportWarn("Agent is working, please wait...")
 			}
-			return m, m.openEditor()
+			return m, m.openEditor(m.textarea.Value())
 		}
 		if key.Matches(msg, DeleteKeyMaps.Escape) {
 			m.deleteMode = false
 			return m, nil
 		}
-		// Hanlde Enter key
+		if key.Matches(msg, m.keyMap.Newline) {
+			m.textarea.InsertRune('\n')
+		}
+		// Handle Enter key
 		if m.textarea.Focused() && key.Matches(msg, m.keyMap.SendMessage) {
 			value := m.textarea.Value()
 			if len(value) > 0 && value[len(value)-1] == '\\' {
 				// If the last character is a backslash, remove it and add a newline
-				m.textarea.SetValue(value[:len(value)-1] + "\n")
-				return m, nil
+				m.textarea.SetValue(value[:len(value)-1])
 			} else {
 				// Otherwise, send the message
 				return m, m.send()
@@ -344,8 +361,9 @@ func (m *editorCmp) startCompletions() tea.Msg {
 		})
 	}
 
-	x := m.textarea.Cursor().X + m.x + 1
-	y := m.textarea.Cursor().Y + m.y + 1
+	cur := m.textarea.Cursor()
+	x := cur.X + m.x // adjust for padding
+	y := cur.Y + m.y + 1
 	return completions.OpenCompletionsMsg{
 		Completions: completionItems,
 		X:           x,
@@ -369,19 +387,31 @@ func (c *editorCmp) IsFocused() bool {
 	return c.textarea.Focused()
 }
 
+// Bindings implements Container.
 func (c *editorCmp) Bindings() []key.Binding {
 	return c.keyMap.KeyBindings()
 }
 
-func NewEditorCmp(app *app.App) util.Model {
+// TODO: most likely we do not need to have the session here
+// we need to move some functionality to the page level
+func (c *editorCmp) SetSession(session session.Session) tea.Cmd {
+	c.session = session
+	return nil
+}
+
+func (c *editorCmp) IsCompletionsOpen() bool {
+	return c.isCompletionsOpen
+}
+
+func New(app *app.App) Editor {
 	t := styles.CurrentTheme()
 	ta := textarea.New()
 	ta.SetStyles(t.S().TextArea)
-	ta.SetPromptFunc(4, func(lineIndex int, focused bool) string {
-		if lineIndex == 0 {
+	ta.SetPromptFunc(4, func(info textarea.PromptInfo) string {
+		if info.LineNumber == 0 {
 			return "  > "
 		}
-		if focused {
+		if info.Focused {
 			return t.S().Base.Foreground(t.GreenDark).Render("::: ")
 		} else {
 			return t.S().Muted.Render("::: ")
@@ -394,6 +424,7 @@ func NewEditorCmp(app *app.App) util.Model {
 	ta.Focus()
 
 	return &editorCmp{
+		// TODO: remove the app instance from here
 		app:      app,
 		textarea: ta,
 		keyMap:   DefaultEditorKeyMap(),

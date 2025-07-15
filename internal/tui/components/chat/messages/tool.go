@@ -114,10 +114,7 @@ func NewToolCallCmp(parentMessageID string, tc message.ToolCall, opts ...ToolCal
 // Returns a command to start the animation for pending tool calls.
 func (m *toolCallCmp) Init() tea.Cmd {
 	m.spinning = m.shouldSpin()
-	if m.spinning {
-		return m.anim.Init()
-	}
-	return nil
+	return m.anim.Init()
 }
 
 // Update handles incoming messages and updates the component state.
@@ -219,11 +216,11 @@ func (m *toolCallCmp) SetIsNested(isNested bool) {
 // renderPending displays the tool name with a loading animation for pending tool calls
 func (m *toolCallCmp) renderPending() string {
 	t := styles.CurrentTheme()
+	icon := t.S().Base.Foreground(t.GreenDark).Render(styles.ToolPending)
 	if m.isNested {
 		tool := t.S().Base.Foreground(t.FgHalfMuted).Render(prettifyToolName(m.call.Name))
-		return fmt.Sprintf("%s %s", tool, m.anim.View())
+		return fmt.Sprintf("%s %s %s", icon, tool, m.anim.View())
 	}
-	icon := t.S().Base.Foreground(t.GreenDark).Render(styles.ToolPending)
 	tool := t.S().Base.Foreground(t.Blue).Render(prettifyToolName(m.call.Name))
 	return fmt.Sprintf("%s %s %s", icon, tool, m.anim.View())
 }

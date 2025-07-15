@@ -44,7 +44,7 @@ func (r *shellVariableResolver) ResolveValue(value string) (string, error) {
 
 	if strings.HasPrefix(value, "$(") && strings.HasSuffix(value, ")") {
 		command := strings.TrimSuffix(strings.TrimPrefix(value, "$("), ")")
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 		defer cancel()
 
 		stdout, _, err := r.shell.Exec(ctx, command)
@@ -54,8 +54,8 @@ func (r *shellVariableResolver) ResolveValue(value string) (string, error) {
 		return strings.TrimSpace(stdout), nil
 	}
 
-	if strings.HasPrefix(value, "$") {
-		varName := strings.TrimPrefix(value, "$")
+	if after, ok := strings.CutPrefix(value, "$"); ok {
+		varName := after
 		value = r.env.Get(varName)
 		if value == "" {
 			return "", fmt.Errorf("environment variable %q not set", varName)
