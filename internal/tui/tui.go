@@ -24,11 +24,13 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/permissions"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/quit"
 	"github.com/charmbracelet/crush/internal/tui/components/dialogs/sessions"
+	"github.com/charmbracelet/crush/internal/tui/components/heartbit"
 	"github.com/charmbracelet/crush/internal/tui/page"
 	"github.com/charmbracelet/crush/internal/tui/page/chat"
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 	"github.com/charmbracelet/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // MouseEventFilter filters mouse events based on the current focus state
@@ -436,9 +438,17 @@ func (a *appModel) View() tea.View {
 		layers...,
 	)
 
+	canvasArea := canvas.Bounds()
+	canvasWidth, canvasHeight := canvasArea.Dx(), canvasArea.Dy()
+	scr := uv.NewScreenBuffer(canvasWidth, canvasHeight)
+	canvas.Draw(scr, scr.Bounds())
+	// uv.NewStyledString(heartbit.Primary).Draw(scr, uv.Rect(10, 3, 28, 11))
+	hb := heartbit.Standard()
+	hb.Draw(scr, uv.Rect(0, 0, 28, 11))
+
 	var view tea.View
 	t := styles.CurrentTheme()
-	view.Layer = canvas
+	view.Layer = scr
 	view.BackgroundColor = t.BgBase
 	view.Cursor = cursor
 	return view
