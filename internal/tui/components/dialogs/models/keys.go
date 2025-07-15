@@ -15,7 +15,7 @@ type KeyMap struct {
 func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Select: key.NewBinding(
-			key.WithKeys("enter", "ctrl+y"),
+			key.WithKeys("enter"),
 			key.WithHelp("enter", "confirm"),
 		),
 		Next: key.NewBinding(
