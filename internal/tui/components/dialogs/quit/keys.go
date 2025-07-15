@@ -32,8 +32,6 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("n", "N"),
 			key.WithHelp("n", "No"),
 		),
-		// TODO I think we can remove this. We don't have tab to toggle in Huh's
-		// confirm dialogue.
 		Tab: key.NewBinding(
 			key.WithKeys("tab"),
 			key.WithHelp("tab", "toggle"),
