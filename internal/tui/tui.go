@@ -442,14 +442,13 @@ func (a *appModel) View() tea.View {
 	canvasWidth, canvasHeight := canvasArea.Dx(), canvasArea.Dy()
 	scr := uv.NewScreenBuffer(canvasWidth, canvasHeight)
 	canvas.Draw(scr, scr.Bounds())
-	// uv.NewStyledString(heartbit.Primary).Draw(scr, uv.Rect(10, 3, 28, 11))
 	hb := heartbit.Standard()
-	hb.Draw(scr, uv.Rect(0, 0, 28, 11))
+	hb.Draw(scr, uv.Rect(10, 3, 28, 11))
 
 	var view tea.View
 	t := styles.CurrentTheme()
 	view.Layer = scr
-	view.BackgroundColor = t.BgBase
+	view.BackgroundColor = t.BgBase()
 	view.Cursor = cursor
 	return view
 }

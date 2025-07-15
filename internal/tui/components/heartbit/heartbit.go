@@ -1,11 +1,14 @@
 package heartbit
 
 import (
+	"math/rand"
 	"strings"
-	"unicode"
 
 	"github.com/MakeNowJust/heredoc"
+	"github.com/charmbracelet/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/rivo/uniseg"
 )
 
 var Primary = heredoc.Doc(`
@@ -32,19 +35,32 @@ func Standard() *Heartbit {
 	}
 }
 
+func (h *Heartbit) Width() int {
+	return lipgloss.Width(h.face)
+}
+
+func (h *Heartbit) Height() int {
+	return lipgloss.Height(h.face)
+}
+
 func (h *Heartbit) Draw(scr uv.Screen, area uv.Rectangle) {
 	for y, line := range strings.Split(h.face, "\n") {
-		for x, r := range line {
-			if unicode.IsSpace(r) {
+		seg := uniseg.NewGraphemes(line)
+		var x int
+		for seg.Next() {
+			if seg.Str() == " " {
+				x++
 				continue
 			}
 			var style uv.Style
+			style.Fg = ansi.IndexedColor(rand.Intn(256))
 			cell := uv.Cell{
 				Style:   style,
-				Content: string(r),
-				Width:   0,
+				Content: seg.Str(),
+				Width:   seg.Width(),
 			}
 			scr.SetCell(area.Min.X+x, area.Min.Y+y, &cell)
+			x += cell.Width
 		}
 	}
 }
