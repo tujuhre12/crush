@@ -72,6 +72,7 @@ type ChatPage interface {
 	util.Model
 	layout.Help
 	IsChatFocused() bool
+	Session() session.Session
 }
 
 // cancelTimerCmd creates a command that expires the cancel timer
@@ -394,6 +395,13 @@ func (p *chatPage) View() string {
 		layers...,
 	)
 	return canvas.Render()
+}
+
+// Session returns the current session for the chat page. If no session is
+// active, [session.Session.ID] will be empty. You can use
+// [session.Session.IsZero] to check if the session is valid.
+func (p *chatPage) Session() session.Session {
+	return p.session
 }
 
 func (p *chatPage) updateCompactConfig(compact bool) tea.Cmd {
