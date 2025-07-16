@@ -43,7 +43,7 @@ func (h *Heartbit) Height() int {
 }
 
 func (h *Heartbit) Draw(scr uv.Screen, area uv.Rectangle) {
-	grad := charmtone.Blend(h.Width(), charmtone.Tuna, charmtone.Blush)
+	grad := charmtone.Blend(h.Width(), charmtone.Cheeky, charmtone.Dolly)
 	for y, line := range strings.Split(h.face, "\n") {
 		seg := uniseg.NewGraphemes(line)
 		var x int
