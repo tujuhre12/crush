@@ -83,3 +83,7 @@ func (h *Heartbit) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (h *Heartbit) View() string {
 	return h.Render()
 }
+
+func (h *Heartbit) IsSectionHeader() bool {
+	return true
+}

@@ -14,6 +14,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/components/chat/messages"
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
 	"github.com/charmbracelet/crush/internal/tui/components/core/list"
+	"github.com/charmbracelet/crush/internal/tui/components/heartbit"
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 )
@@ -409,7 +410,8 @@ func (m *messageListCmp) SetSession(session session.Session) tea.Cmd {
 	toolResultMap := m.buildToolResultMap(sessionMessages)
 
 	// Convert messages to UI components
-	uiMessages := m.convertMessagesToUI(sessionMessages, toolResultMap)
+	uiMessages := []util.Model{heartbit.Standard()}
+	uiMessages = append(uiMessages, m.convertMessagesToUI(sessionMessages, toolResultMap)...)
 
 	return m.listCmp.SetItems(uiMessages)
 }
