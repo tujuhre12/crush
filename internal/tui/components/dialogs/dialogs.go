@@ -148,10 +148,10 @@ func (d dialogCmp) ActiveDialogID() DialogID {
 
 func (d dialogCmp) GetLayers() []*lipgloss.Layer {
 	layers := []*lipgloss.Layer{}
-	for _, dialog := range d.Dialogs() {
+	for i, dialog := range d.Dialogs() {
 		dialogView := dialog.View()
 		row, col := dialog.Position()
-		layers = append(layers, lipgloss.NewLayer(dialogView).X(col).Y(row))
+		layers = append(layers, lipgloss.NewLayer(dialogView).X(col).Y(row).Z(i+10))
 	}
 	return layers
 }
