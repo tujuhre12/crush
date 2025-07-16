@@ -22,6 +22,13 @@ type Session struct {
 	UpdatedAt        int64
 }
 
+var zeroSession = Session{}
+
+// IsZero checks if the session is zero-valued.
+func (s Session) IsZero() bool {
+	return s == zeroSession
+}
+
 type Service interface {
 	pubsub.Suscriber[Session]
 	Create(ctx context.Context, title string) (Session, error)
