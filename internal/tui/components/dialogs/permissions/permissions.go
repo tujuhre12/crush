@@ -52,9 +52,10 @@ type permissionDialogCmp struct {
 	selectedOption  int // 0: Allow, 1: Allow for session, 2: Deny
 
 	// Diff view state
-	diffSplitMode bool // true for split, false for unified
-	diffXOffset   int  // horizontal scroll offset
-	diffYOffset   int  // vertical scroll offset
+	defaultDiffSplitMode bool  // true for split, false for unified
+	diffSplitMode        *bool // nil means use defaultDiffSplitMode
+	diffXOffset          int   // horizontal scroll offset
+	diffYOffset          int   // vertical scroll offset
 
 	// Caching
 	cachedContent string
@@ -122,7 +123,12 @@ func (p *permissionDialogCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			)
 		case key.Matches(msg, p.keyMap.ToggleDiffMode):
 			if p.supportsDiffView() {
-				p.diffSplitMode = !p.diffSplitMode
+				if p.diffSplitMode == nil {
+					diffSplitMode := !p.defaultDiffSplitMode
+					p.diffSplitMode = &diffSplitMode
+				} else {
+					*p.diffSplitMode = !*p.diffSplitMode
+				}
 				p.contentDirty = true // Mark content as dirty when diff mode changes
 				return p, nil
 			}
@@ -317,18 +323,14 @@ func (p *permissionDialogCmp) generateBashContent() string {
 		content := pr.Command
 		t := styles.CurrentTheme()
 		content = strings.TrimSpace(content)
-		content = "\n" + content + "\n"
 		lines := strings.Split(content, "\n")
 
 		width := p.width - 4
 		var out []string
 		for _, ln := range lines {
-			ln = " " + ln // left padding
-			if len(ln) > width {
-				ln = ansi.Truncate(ln, width, "…")
-			}
 			out = append(out, t.S().Muted.
 				Width(width).
+				Padding(0, 3).
 				Foreground(t.FgBase).
 				Background(t.BgSubtle).
 				Render(ln))
@@ -338,6 +340,7 @@ func (p *permissionDialogCmp) generateBashContent() string {
 		renderedContent := strings.Join(out, "\n")
 		finalContent := baseStyle.
 			Width(p.contentViewPort.Width()).
+			Padding(1, 0).
 			Render(renderedContent)
 
 		return finalContent
@@ -354,7 +357,7 @@ func (p *permissionDialogCmp) generateEditContent() string {
 			Width(p.contentViewPort.Width()).
 			XOffset(p.diffXOffset).
 			YOffset(p.diffYOffset)
-		if p.diffSplitMode {
+		if p.useDiffSplitMode() {
 			formatter = formatter.Split()
 		} else {
 			formatter = formatter.Unified()
@@ -376,7 +379,7 @@ func (p *permissionDialogCmp) generateWriteContent() string {
 			Width(p.contentViewPort.Width()).
 			XOffset(p.diffXOffset).
 			YOffset(p.diffYOffset)
-		if p.diffSplitMode {
+		if p.useDiffSplitMode() {
 			formatter = formatter.Split()
 		} else {
 			formatter = formatter.Unified()
@@ -407,13 +410,26 @@ func (p *permissionDialogCmp) generateDefaultContent() string {
 
 	content := p.permission.Description
 
-	// Use the cache for markdown rendering
-	renderedContent := p.GetOrSetMarkdown(p.permission.ID, func() (string, error) {
-		r := styles.GetMarkdownRenderer(p.width - 4)
-		s, err := r.Render(content)
-		return s, err
-	})
+	content = strings.TrimSpace(content)
+	content = "\n" + content + "\n"
+	lines := strings.Split(content, "\n")
 
+	width := p.width - 4
+	var out []string
+	for _, ln := range lines {
+		ln = " " + ln // left padding
+		if len(ln) > width {
+			ln = ansi.Truncate(ln, width, "…")
+		}
+		out = append(out, t.S().Muted.
+			Width(width).
+			Foreground(t.FgBase).
+			Background(t.BgSubtle).
+			Render(ln))
+	}
+
+	// Use the cache for markdown rendering
+	renderedContent := strings.Join(out, "\n")
 	finalContent := baseStyle.
 		Width(p.contentViewPort.Width()).
 		Render(renderedContent)
@@ -423,6 +439,14 @@ func (p *permissionDialogCmp) generateDefaultContent() string {
 	}
 
 	return finalContent
+}
+
+func (p *permissionDialogCmp) useDiffSplitMode() bool {
+	if p.diffSplitMode != nil {
+		return *p.diffSplitMode
+	} else {
+		return p.defaultDiffSplitMode
+	}
 }
 
 func (p *permissionDialogCmp) styleViewport() string {
@@ -445,7 +469,11 @@ func (p *permissionDialogCmp) render() string {
 	contentFinal := p.getOrGenerateContent()
 
 	// Always set viewport content (the caching is handled in getOrGenerateContent)
-	contentHeight := min(p.height-9, lipgloss.Height(contentFinal))
+	const minContentHeight = 9
+	contentHeight := min(
+		max(minContentHeight, p.height-minContentHeight),
+		lipgloss.Height(contentFinal),
+	)
 	p.contentViewPort.SetHeight(contentHeight)
 	p.contentViewPort.SetContent(contentFinal)
 
@@ -511,6 +539,12 @@ func (p *permissionDialogCmp) SetSize() tea.Cmd {
 		p.width = int(float64(p.wWidth) * 0.7)
 		p.height = int(float64(p.wHeight) * 0.5)
 	}
+
+	// Default to diff split mode when dialog is wide enough.
+	p.defaultDiffSplitMode = p.width >= 140
+
+	// Set a maximum width for the dialog
+	p.width = min(p.width, 180)
 
 	// Mark content as dirty if size changed
 	if oldWidth != p.width || oldHeight != p.height {
