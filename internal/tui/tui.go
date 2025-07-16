@@ -395,6 +395,7 @@ func (a *appModel) View() tea.View {
 	if withHelp, ok := page.(core.KeyMapHelp); ok {
 		a.status.SetKeyMap(withHelp.Help())
 	}
+
 	pageView := page.View()
 	components := []string{
 		pageView,
@@ -433,10 +434,19 @@ func (a *appModel) View() tea.View {
 		)
 	}
 
-	// Add the heartbit layer on top
-	layers = append(layers,
-		lipgloss.NewLayer(heartbit.Standard()).X(10).Y(3).Z(999),
-	)
+	if a.wWidth >= 80 {
+		switch page := page.(type) {
+		case chat.ChatPage:
+			if page.Session().IsZero() {
+				// Render [heartbit] on the top right corner of the screen.
+				hb := heartbit.Standard()
+				x, y := max(hb.Width()-6, a.wWidth-hb.Width()-6), 6
+				layers = append(layers,
+					lipgloss.NewLayer(hb).X(x).Y(y).Z(1),
+				)
+			}
+		}
+	}
 
 	canvas := lipgloss.NewCanvas(
 		layers...,
