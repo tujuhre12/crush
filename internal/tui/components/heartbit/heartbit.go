@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/MakeNowJust/heredoc"
+	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/exp/charmtone"
@@ -63,4 +64,22 @@ func (h *Heartbit) Draw(scr uv.Screen, area uv.Rectangle) {
 			x += cell.Width
 		}
 	}
+}
+
+func (h *Heartbit) Render() string {
+	scr := uv.NewScreenBuffer(h.Width(), h.Height())
+	h.Draw(scr, scr.Bounds())
+	return scr.Render()
+}
+
+func (h *Heartbit) Init() tea.Cmd {
+	return nil
+}
+
+func (h *Heartbit) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	return h, nil
+}
+
+func (h *Heartbit) View() string {
+	return h.Render()
 }
