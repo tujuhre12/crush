@@ -60,13 +60,13 @@ func (n *Notifier) sendMacOSNotification(ctx context.Context, title, message str
 	script := fmt.Sprintf(`display notification "%s" with title "%s" sound name "Glass"`, message, title)
 	slog.Debug("Executing osascript", "script", script)
 	cmd := exec.CommandContext(ctx, "osascript", "-e", script)
-	
+
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		slog.Debug("osascript failed", "error", err, "output", string(output))
 		return fmt.Errorf("osascript failed: %w, output: %s", err, string(output))
 	}
-	
+
 	slog.Debug("osascript succeeded", "output", string(output))
 	return nil
 }
@@ -87,7 +87,7 @@ func (n *Notifier) sendWindowsNotification(ctx context.Context, title, message s
 	} else {
 		slog.Debug("Windows toast notification failed, trying fallback", "error", err)
 	}
-	
+
 	// Fallback to msg command (works on all Windows versions)
 	slog.Debug("Attempting Windows msg notification")
 	if err := n.sendWindowsMsgNotification(ctx, title, message); err == nil {
