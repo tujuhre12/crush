@@ -8,33 +8,6 @@
 - **Format**: `task fmt` (gofumpt -w .)
 - **Dev**: `task dev` (runs with profiling enabled)
 
-## Features
-
-### Native Notifications
-
-Crush supports native desktop notifications when tasks complete. This works across platforms:
-- **macOS**: Uses `osascript` with system notification sounds
-- **Linux**: Uses `notify-send` 
-- **Windows**: Uses PowerShell toast notifications (Windows 10+) with fallback to `msg` command
-
-**Configuration**: Add to your `crush.json`:
-```json
-{
-  "options": {
-    "disable_notifications": true
-  }
-}
-```
-
-Notifications are **enabled by default** and will show:
-- When non-interactive tasks complete successfully
-- When interactive chat sessions finish processing assistant responses
-
-**Windows Notes**:
-- Windows 10+ gets modern toast notifications
-- Older Windows versions fall back to message boxes
-- Toast notifications may require Windows notification settings to be enabled
-
 ## Code Style Guidelines
 
 - **Imports**: Use goimports formatting, group stdlib, external, internal packages
