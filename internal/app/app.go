@@ -174,6 +174,9 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 			fmt.Println(part)
 
 			slog.Info("Non-interactive run completed", "session_id", sess.ID)
+
+			// Send completion notification
+			app.Notifier.NotifyTaskComplete(ctx, "Crush Task Complete", "Your task has finished successfully")
 			return nil
 
 		case event := <-messageEvents:
@@ -190,23 +193,6 @@ func (app *App) RunNonInteractive(ctx context.Context, prompt string, quiet bool
 			return ctx.Err()
 		}
 	}
-
-	// Get the text content from the response
-	content := "No content available"
-	if result.Message.Content().String() != "" {
-		content = result.Message.Content().String()
-	}
-
-	out, err := format.FormatOutput(content, outputFormat)
-	if err != nil {
-		return err
-	}
-
-	fmt.Println(out)
-	slog.Info("Non-interactive run completed", "session_id", sess.ID)
-
-	// Send completion notification
-	a.Notifier.NotifyTaskComplete(ctx, "Crush Task Complete", "Your task has finished successfully")
 
 	return nil
 }
