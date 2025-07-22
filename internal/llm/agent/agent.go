@@ -450,7 +450,7 @@ func (a *agent) createUserMessage(ctx context.Context, sessionID, content string
 func (a *agent) streamAndHandleEvents(ctx context.Context, sessionID string, msgHistory []message.Message) (message.Message, *message.Message, error) {
 	ctx = context.WithValue(ctx, tools.SessionIDContextKey, sessionID)
 	if !a.toolsDone.Load() {
-		return message.Message{}, nil, fmt.Errorf("Agent is still initializing, please wait a moment and try again")
+		return message.Message{}, nil, fmt.Errorf("agent is still initializing, please wait a moment and try again")
 	}
 	eventChan := a.provider.StreamResponse(ctx, msgHistory, a.tools)
 
@@ -911,7 +911,7 @@ func (a *agent) UpdateModel() error {
 	smallModelCfg := cfg.Models[config.SelectedModelTypeSmall]
 	var smallModelProviderCfg config.ProviderConfig
 
-	for _, p := range cfg.Providers {
+	for _, p := range cfg.Providers.Seq2() {
 		if p.ID == smallModelCfg.Provider {
 			smallModelProviderCfg = p
 			break
