@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/diff"
 	"github.com/charmbracelet/crush/internal/fsext"
@@ -26,6 +27,8 @@ import (
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type FileHistory struct {
@@ -33,7 +36,7 @@ type FileHistory struct {
 	latestVersion  history.File
 }
 
-const LogoHeightBreakpoint = 40
+const LogoHeightBreakpoint = 30
 
 // Default maximum number of items to show in each section
 const (
@@ -111,12 +114,22 @@ func (m *sidebarCmp) View() string {
 	t := styles.CurrentTheme()
 	parts := []string{}
 
+	style := t.S().Base.
+		Width(m.width).
+		Height(m.height).
+		Padding(1)
+	if m.compactMode {
+		style = style.PaddingTop(0)
+	}
+
 	if !m.compactMode {
 		if m.height > LogoHeightBreakpoint {
 			parts = append(parts, m.logo)
 		} else {
 			// Use a smaller logo for smaller screens
-			parts = append(parts, m.smallerScreenLogo(), "")
+			parts = append(parts,
+				logo.SmallRender(m.width-style.GetHorizontalFrameSize()),
+				"")
 		}
 	}
 
@@ -156,13 +169,6 @@ func (m *sidebarCmp) View() string {
 		)
 	}
 
-	style := t.S().Base.
-		Width(m.width).
-		Height(m.height).
-		Padding(1)
-	if m.compactMode {
-		style = style.PaddingTop(0)
-	}
 	return style.Render(
 		lipgloss.JoinVertical(lipgloss.Left, parts...),
 	)
@@ -686,7 +692,7 @@ func (m *sidebarCmp) filesBlock() string {
 	if totalFilesWithChanges > maxFiles {
 		remaining := totalFilesWithChanges - maxFiles
 		fileList = append(fileList,
-			t.S().Base.Foreground(t.FgMuted).Render(fmt.Sprintf("… and %d more", remaining)),
+			t.S().Base.Foreground(t.FgSubtle).Render(fmt.Sprintf("…and %d more", remaining)),
 		)
 	}
 
@@ -774,7 +780,7 @@ func (m *sidebarCmp) lspBlock() string {
 	if len(lsp) > maxLSPs {
 		remaining := len(lsp) - maxLSPs
 		lspList = append(lspList,
-			t.S().Base.Foreground(t.FgMuted).Render(fmt.Sprintf("… and %d more", remaining)),
+			t.S().Base.Foreground(t.FgSubtle).Render(fmt.Sprintf("…and %d more", remaining)),
 		)
 	}
 
@@ -831,7 +837,7 @@ func (m *sidebarCmp) mcpBlock() string {
 	if len(mcps) > maxMCPs {
 		remaining := len(mcps) - maxMCPs
 		mcpList = append(mcpList,
-			t.S().Base.Foreground(t.FgMuted).Render(fmt.Sprintf("… and %d more", remaining)),
+			t.S().Base.Foreground(t.FgSubtle).Render(fmt.Sprintf("…and %d more", remaining)),
 		)
 	}
 
@@ -880,16 +886,40 @@ func formatTokensAndCost(tokens, contextWindow int64, cost float64) string {
 }
 
 func (s *sidebarCmp) currentModelBlock() string {
-	agentCfg := config.Get().Agents["coder"]
+	cfg := config.Get()
+	agentCfg := cfg.Agents["coder"]
+
+	selectedModel := cfg.Models[agentCfg.Model]
+
 	model := config.Get().GetModelByType(agentCfg.Model)
+	modelProvider := config.Get().GetProviderForModel(agentCfg.Model)
 
 	t := styles.CurrentTheme()
 
 	modelIcon := t.S().Base.Foreground(t.FgSubtle).Render(styles.ModelIcon)
-	modelName := t.S().Text.Render(model.Model)
+	modelName := t.S().Text.Render(model.Name)
 	modelInfo := fmt.Sprintf("%s %s", modelIcon, modelName)
 	parts := []string{
 		modelInfo,
+	}
+	if model.CanReason {
+		reasoningInfoStyle := t.S().Subtle.PaddingLeft(2)
+		switch modelProvider.Type {
+		case catwalk.TypeOpenAI:
+			reasoningEffort := model.DefaultReasoningEffort
+			if selectedModel.ReasoningEffort != "" {
+				reasoningEffort = selectedModel.ReasoningEffort
+			}
+			formatter := cases.Title(language.English, cases.NoLower)
+			parts = append(parts, reasoningInfoStyle.Render(formatter.String(fmt.Sprintf("Reasoning %s", reasoningEffort))))
+		case catwalk.TypeAnthropic:
+			formatter := cases.Title(language.English, cases.NoLower)
+			if selectedModel.Think {
+				parts = append(parts, reasoningInfoStyle.Render(formatter.String("Thinking on")))
+			} else {
+				parts = append(parts, reasoningInfoStyle.Render(formatter.String("Thinking off")))
+			}
+		}
 	}
 	if s.session.ID != "" {
 		parts = append(
@@ -905,19 +935,6 @@ func (s *sidebarCmp) currentModelBlock() string {
 		lipgloss.Left,
 		parts...,
 	)
-}
-
-func (m *sidebarCmp) smallerScreenLogo() string {
-	t := styles.CurrentTheme()
-	title := t.S().Base.Foreground(t.Secondary).Render("Charm™")
-	title += " " + styles.ApplyBoldForegroundGrad("CRUSH", t.Secondary, t.Primary)
-	remainingWidth := m.width - lipgloss.Width(title) - 3
-	if remainingWidth > 0 {
-		char := "╱"
-		lines := strings.Repeat(char, remainingWidth)
-		title += " " + t.S().Base.Foreground(t.Primary).Render(lines)
-	}
-	return title
 }
 
 // SetSession implements Sidebar.

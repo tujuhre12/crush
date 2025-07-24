@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/bubbles/v2/key"
 	tea "github.com/charmbracelet/bubbletea/v2"
@@ -12,6 +13,7 @@ import (
 	"github.com/charmbracelet/crush/internal/permission"
 	"github.com/charmbracelet/crush/internal/pubsub"
 	cmpChat "github.com/charmbracelet/crush/internal/tui/components/chat"
+	"github.com/charmbracelet/crush/internal/tui/components/chat/splash"
 	"github.com/charmbracelet/crush/internal/tui/components/completions"
 	"github.com/charmbracelet/crush/internal/tui/components/core"
 	"github.com/charmbracelet/crush/internal/tui/components/core/layout"
@@ -71,8 +73,9 @@ type appModel struct {
 
 	app *app.App
 
-	dialog      dialogs.DialogCmp
-	completions completions.Completions
+	dialog       dialogs.DialogCmp
+	completions  completions.Completions
+	isConfigured bool
 
 	// Chat Page Specific
 	selectedSessionID string // The ID of the currently selected session
@@ -97,6 +100,7 @@ func (a appModel) Init() tea.Cmd {
 func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
+	a.isConfigured = config.HasInitialDataConfig()
 
 	switch msg := msg.(type) {
 	case tea.KeyboardEnhancementsMsg:
@@ -109,6 +113,7 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Batch(cmds...)
 	case tea.WindowSizeMsg:
+		a.wWidth, a.wHeight = msg.Width, msg.Height
 		a.completions.Update(msg)
 		return a, a.handleWindowResize(msg.Width, msg.Height)
 
@@ -204,7 +209,7 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, util.CmdHandler(dialogs.CloseDialogMsg{})
 		}
 		return a, util.CmdHandler(dialogs.OpenDialogMsg{
-			Model: filepicker.NewFilePickerCmp(),
+			Model: filepicker.NewFilePickerCmp(a.app.Config().WorkingDir()),
 		})
 	// Permissions
 	case pubsub.Event[permission.PermissionRequest]:
@@ -249,9 +254,27 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		return a, tea.Batch(cmds...)
+	case splash.OnboardingCompleteMsg:
+		a.isConfigured = config.HasInitialDataConfig()
+		updated, pageCmd := a.pages[a.currentPage].Update(msg)
+		a.pages[a.currentPage] = updated.(util.Model)
+		cmds = append(cmds, pageCmd)
+		return a, tea.Batch(cmds...)
 	// Key Press Messages
 	case tea.KeyPressMsg:
 		return a, a.handleKeyPressMsg(msg)
+
+	case tea.PasteMsg:
+		if a.dialog.HasDialogs() {
+			u, dialogCmd := a.dialog.Update(msg)
+			a.dialog = u.(dialogs.DialogCmp)
+			cmds = append(cmds, dialogCmd)
+		} else {
+			updated, pageCmd := a.pages[a.currentPage].Update(msg)
+			a.pages[a.currentPage] = updated.(util.Model)
+			cmds = append(cmds, pageCmd)
+		}
+		return a, tea.Batch(cmds...)
 	}
 	s, _ := a.status.Update(msg)
 	a.status = s.(status.StatusCmp)
@@ -269,7 +292,6 @@ func (a *appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // handleWindowResize processes window resize events and updates all components.
 func (a *appModel) handleWindowResize(width, height int) tea.Cmd {
 	var cmds []tea.Cmd
-	a.wWidth, a.wHeight = width, height
 	if a.showingFullHelp {
 		height -= 5
 	} else {
@@ -298,26 +320,20 @@ func (a *appModel) handleWindowResize(width, height int) tea.Cmd {
 
 // handleKeyPressMsg processes keyboard input and routes to appropriate handlers.
 func (a *appModel) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
+	if a.completions.Open() {
+		// completions
+		keyMap := a.completions.KeyMap()
+		switch {
+		case key.Matches(msg, keyMap.Up), key.Matches(msg, keyMap.Down),
+			key.Matches(msg, keyMap.Select), key.Matches(msg, keyMap.Cancel),
+			key.Matches(msg, keyMap.UpInsert), key.Matches(msg, keyMap.DownInsert):
+			u, cmd := a.completions.Update(msg)
+			a.completions = u.(completions.Completions)
+			return cmd
+		}
+	}
 	switch {
-	// completions
-	case a.completions.Open() && key.Matches(msg, a.completions.KeyMap().Up):
-		u, cmd := a.completions.Update(msg)
-		a.completions = u.(completions.Completions)
-		return cmd
-
-	case a.completions.Open() && key.Matches(msg, a.completions.KeyMap().Down):
-		u, cmd := a.completions.Update(msg)
-		a.completions = u.(completions.Completions)
-		return cmd
-	case a.completions.Open() && key.Matches(msg, a.completions.KeyMap().Select):
-		u, cmd := a.completions.Update(msg)
-		a.completions = u.(completions.Completions)
-		return cmd
-	case a.completions.Open() && key.Matches(msg, a.completions.KeyMap().Cancel):
-		u, cmd := a.completions.Update(msg)
-		a.completions = u.(completions.Completions)
-		return cmd
-		// help
+	// help
 	case key.Matches(msg, a.keyMap.Help):
 		a.status.ToggleFullHelp()
 		a.showingFullHelp = !a.showingFullHelp
@@ -332,6 +348,10 @@ func (a *appModel) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 		})
 
 	case key.Matches(msg, a.keyMap.Commands):
+		// if the app is not configured show no commands
+		if !a.isConfigured {
+			return nil
+		}
 		if a.dialog.ActiveDialogID() == commands.CommandsDialogID {
 			return util.CmdHandler(dialogs.CloseDialogMsg{})
 		}
@@ -342,6 +362,10 @@ func (a *appModel) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 			Model: commands.NewCommandDialog(a.selectedSessionID),
 		})
 	case key.Matches(msg, a.keyMap.Sessions):
+		// if the app is not configured show no sessions
+		if !a.isConfigured {
+			return nil
+		}
 		if a.dialog.ActiveDialogID() == sessions.SessionsDialogID {
 			return util.CmdHandler(dialogs.CloseDialogMsg{})
 		}
@@ -400,6 +424,27 @@ func (a *appModel) moveToPage(pageID page.PageID) tea.Cmd {
 
 // View renders the complete application interface including pages, dialogs, and overlays.
 func (a *appModel) View() tea.View {
+	var view tea.View
+	t := styles.CurrentTheme()
+	view.BackgroundColor = t.BgBase
+	if a.wWidth < 25 || a.wHeight < 15 {
+		view.Layer = lipgloss.NewCanvas(
+			lipgloss.NewLayer(
+				t.S().Base.Width(a.wWidth).Height(a.wHeight).
+					Align(lipgloss.Center, lipgloss.Center).
+					Render(
+						t.S().Base.
+							Padding(1, 4).
+							Foreground(t.White).
+							BorderStyle(lipgloss.RoundedBorder()).
+							BorderForeground(t.Primary).
+							Render("Window too small!"),
+					),
+			),
+		)
+		return view
+	}
+
 	page := a.pages[a.currentPage]
 	if withHelp, ok := page.(core.KeyMapHelp); ok {
 		a.status.SetKeyMap(withHelp.Help())
@@ -424,6 +469,11 @@ func (a *appModel) View() tea.View {
 	var cursor *tea.Cursor
 	if v, ok := page.(util.Cursor); ok {
 		cursor = v.Cursor()
+		// Hide the cursor if it's positioned outside the textarea
+		statusHeight := a.height - strings.Count(pageView, "\n") + 1
+		if cursor != nil && cursor.Y+statusHeight+chat.EditorHeight-2 <= a.height { // 2 for the top and bottom app padding
+			cursor = nil
+		}
 	}
 	activeView := a.dialog.ActiveModel()
 	if activeView != nil {
@@ -446,10 +496,7 @@ func (a *appModel) View() tea.View {
 		layers...,
 	)
 
-	var view tea.View
-	t := styles.CurrentTheme()
 	view.Layer = canvas
-	view.BackgroundColor = t.BgBase
 	view.Cursor = cursor
 	return view
 }

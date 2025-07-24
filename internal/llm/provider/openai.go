@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/fur/provider"
 	"github.com/charmbracelet/crush/internal/llm/tools"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/openai/openai-go"
@@ -44,10 +44,12 @@ func createOpenAIClient(opts providerClientOptions) openai.Client {
 		}
 	}
 
-	if opts.extraHeaders != nil {
-		for key, value := range opts.extraHeaders {
-			openaiClientOptions = append(openaiClientOptions, option.WithHeader(key, value))
-		}
+	for key, value := range opts.extraHeaders {
+		openaiClientOptions = append(openaiClientOptions, option.WithHeader(key, value))
+	}
+
+	for extraKey, extraValue := range opts.extraBody {
+		openaiClientOptions = append(openaiClientOptions, option.WithJSONSet(extraKey, extraValue))
 	}
 
 	return openai.NewClient(openaiClientOptions...)
@@ -64,7 +66,7 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 			textBlock := openai.ChatCompletionContentPartTextParam{Text: msg.Content().String()}
 			content = append(content, openai.ChatCompletionContentPartUnionParam{OfText: &textBlock})
 			for _, binaryContent := range msg.BinaryContent() {
-				imageURL := openai.ChatCompletionContentPartImageImageURLParam{URL: binaryContent.String(provider.InferenceProviderOpenAI)}
+				imageURL := openai.ChatCompletionContentPartImageImageURLParam{URL: binaryContent.String(catwalk.InferenceProviderOpenAI)}
 				imageBlock := openai.ChatCompletionContentPartImageParam{ImageURL: imageURL}
 
 				content = append(content, openai.ChatCompletionContentPartUnionParam{OfImageURL: &imageBlock})
@@ -220,7 +222,7 @@ func (o *openaiClient) send(ctx context.Context, messages []message.Message, too
 				return nil, retryErr
 			}
 			if retry {
-				slog.Warn(fmt.Sprintf("Retrying due to rate limit... attempt %d of %d", attempts, maxRetries))
+				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -393,7 +395,7 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 				return
 			}
 			if retry {
-				slog.Warn(fmt.Sprintf("Retrying due to rate limit... attempt %d of %d", attempts, maxRetries))
+				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
 				select {
 				case <-ctx.Done():
 					// context cancelled
@@ -484,6 +486,6 @@ func (o *openaiClient) usage(completion openai.ChatCompletion) TokenUsage {
 	}
 }
 
-func (o *openaiClient) Model() provider.Model {
+func (o *openaiClient) Model() catwalk.Model {
 	return o.providerOptions.model(o.providerOptions.modelType)
 }

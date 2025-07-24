@@ -1,6 +1,8 @@
 package completions
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/v2/key"
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/crush/internal/tui/components/core/list"
@@ -23,15 +25,19 @@ type OpenCompletionsMsg struct {
 }
 
 type FilterCompletionsMsg struct {
-	Query string // The query to filter completions
+	Query  string // The query to filter completions
+	Reopen bool
 }
 
 type CompletionsClosedMsg struct{}
 
+type CompletionsOpenedMsg struct{}
+
 type CloseCompletionsMsg struct{}
 
 type SelectCompletionMsg struct {
-	Value any // The value of the selected completion item
+	Value  any // The value of the selected completion item
+	Insert bool
 }
 
 type Completions interface {
@@ -110,6 +116,30 @@ func (c *completionsCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d, cmd := c.list.Update(msg)
 			c.list = d.(list.ListModel)
 			return c, cmd
+		case key.Matches(msg, c.keyMap.UpInsert):
+			selectedItemInx := c.list.SelectedIndex() - 1
+			items := c.list.Items()
+			if selectedItemInx == list.NoSelection || selectedItemInx < 0 {
+				return c, nil // No item selected, do nothing
+			}
+			selectedItem := items[selectedItemInx].(CompletionItem).Value()
+			c.list.SetSelected(selectedItemInx)
+			return c, util.CmdHandler(SelectCompletionMsg{
+				Value:  selectedItem,
+				Insert: true,
+			})
+		case key.Matches(msg, c.keyMap.DownInsert):
+			selectedItemInx := c.list.SelectedIndex() + 1
+			items := c.list.Items()
+			if selectedItemInx == list.NoSelection || selectedItemInx >= len(items) {
+				return c, nil // No item selected, do nothing
+			}
+			selectedItem := items[selectedItemInx].(CompletionItem).Value()
+			c.list.SetSelected(selectedItemInx)
+			return c, util.CmdHandler(SelectCompletionMsg{
+				Value:  selectedItem,
+				Insert: true,
+			})
 		case key.Matches(msg, c.keyMap.Select):
 			selectedItemInx := c.list.SelectedIndex()
 			if selectedItemInx == list.NoSelection {
@@ -126,11 +156,7 @@ func (c *completionsCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case CloseCompletionsMsg:
 		c.open = false
-		c.query = ""
-		return c, tea.Batch(
-			c.list.SetItems([]util.Model{}),
-			util.CmdHandler(CompletionsClosedMsg{}),
-		)
+		return c, util.CmdHandler(CompletionsClosedMsg{})
 	case OpenCompletionsMsg:
 		c.open = true
 		c.query = ""
@@ -143,21 +169,41 @@ func (c *completionsCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			items = append(items, item)
 		}
 		c.height = max(min(c.height, len(items)), 1) // Ensure at least 1 item height
-		cmds := []tea.Cmd{
+		return c, tea.Batch(
 			c.list.SetSize(c.width, c.height),
 			c.list.SetItems(items),
-		}
-		return c, tea.Batch(cmds...)
+			util.CmdHandler(CompletionsOpenedMsg{}),
+		)
 	case FilterCompletionsMsg:
-		c.query = msg.Query
-		if !c.open {
-			return c, nil // If completions are not open, do nothing
+		if !c.open && !msg.Reopen {
+			return c, nil
 		}
+		if msg.Query == c.query {
+			// PERF: if same query, don't need to filter again
+			return c, nil
+		}
+		if len(c.list.Items()) == 0 &&
+			len(msg.Query) > len(c.query) &&
+			strings.HasPrefix(msg.Query, c.query) {
+			// PERF: if c.query didn't match anything,
+			// AND msg.Query is longer than c.query,
+			// AND msg.Query is prefixed with c.query - which means
+			//		that the user typed more chars after a 0 match,
+			// it won't match anything, so return earlier.
+			return c, nil
+		}
+		c.query = msg.Query
 		var cmds []tea.Cmd
 		cmds = append(cmds, c.list.Filter(msg.Query))
 		itemsLen := len(c.list.Items())
 		c.height = max(min(maxCompletionsHeight, itemsLen), 1)
 		cmds = append(cmds, c.list.SetSize(c.width, c.height))
+		if itemsLen == 0 {
+			cmds = append(cmds, util.CmdHandler(CloseCompletionsMsg{}))
+		} else if msg.Reopen {
+			c.open = true
+			cmds = append(cmds, util.CmdHandler(CompletionsOpenedMsg{}))
+		}
 		return c, tea.Batch(cmds...)
 	}
 	return c, nil
@@ -165,11 +211,8 @@ func (c *completionsCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View implements Completions.
 func (c *completionsCmp) View() string {
-	if !c.open {
+	if !c.open || len(c.list.Items()) == 0 {
 		return ""
-	}
-	if len(c.list.Items()) == 0 {
-		return c.style().Render("No completions found")
 	}
 
 	return c.style().Render(c.list.View())

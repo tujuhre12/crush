@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/ansiext"
 	"github.com/charmbracelet/crush/internal/fsext"
 	"github.com/charmbracelet/crush/internal/llm/agent"
 	"github.com/charmbracelet/crush/internal/llm/tools"
@@ -124,9 +125,9 @@ func (br baseRenderer) makeNestedHeader(v *toolCallCmp, tool string, width int, 
 	} else if v.cancelled {
 		icon = t.S().Muted.Render(styles.ToolPending)
 	}
-	tool = t.S().Base.Foreground(t.FgHalfMuted).Render(tool) + " "
+	tool = t.S().Base.Foreground(t.FgHalfMuted).Render(tool)
 	prefix := fmt.Sprintf("%s %s ", icon, tool)
-	return prefix + renderParamList(true, width-lipgloss.Width(tool), params...)
+	return prefix + renderParamList(true, width-lipgloss.Width(prefix), params...)
 }
 
 // makeHeader builds "<Tool>: param (key=value)" and truncates as needed.
@@ -162,6 +163,7 @@ func (br baseRenderer) renderError(v *toolCallCmp, message string) string {
 // Register tool renderers
 func init() {
 	registry.register(tools.BashToolName, func() renderer { return bashRenderer{} })
+	registry.register(tools.DownloadToolName, func() renderer { return downloadRenderer{} })
 	registry.register(tools.ViewToolName, func() renderer { return viewRenderer{} })
 	registry.register(tools.EditToolName, func() renderer { return editRenderer{} })
 	registry.register(tools.WriteToolName, func() renderer { return writeRenderer{} })
@@ -211,10 +213,19 @@ func (br bashRenderer) Render(v *toolCallCmp) string {
 	args := newParamBuilder().addMain(cmd).build()
 
 	return br.renderWithParams(v, "Bash", args, func() string {
-		if v.result.Content == tools.BashNoOutput {
+		var meta tools.BashResponseMetadata
+		if err := br.unmarshalParams(v.result.Metadata, &meta); err != nil {
+			return renderPlainContent(v, v.result.Content)
+		}
+		// for backwards compatibility with older tool calls.
+		if meta.Output == "" && v.result.Content != tools.BashNoOutput {
+			meta.Output = v.result.Content
+		}
+
+		if meta.Output == "" {
 			return ""
 		}
-		return renderPlainContent(v, v.result.Content)
+		return renderPlainContent(v, meta.Output)
 	})
 }
 
@@ -374,6 +385,32 @@ func formatTimeout(timeout int) string {
 		return ""
 	}
 	return (time.Duration(timeout) * time.Second).String()
+}
+
+// -----------------------------------------------------------------------------
+//  Download renderer
+// -----------------------------------------------------------------------------
+
+// downloadRenderer handles file downloading with URL and file path display
+type downloadRenderer struct {
+	baseRenderer
+}
+
+// Render displays the download URL and destination file path with timeout parameter
+func (dr downloadRenderer) Render(v *toolCallCmp) string {
+	var params tools.DownloadParams
+	var args []string
+	if err := dr.unmarshalParams(v.call.Input, &params); err == nil {
+		args = newParamBuilder().
+			addMain(params.URL).
+			addKeyValue("file_path", fsext.PrettyPath(params.FilePath)).
+			addKeyValue("timeout", formatTimeout(params.Timeout)).
+			build()
+	}
+
+	return dr.renderWithParams(v, "Download", args, func() string {
+		return renderPlainContent(v, v.result.Content)
+	})
 }
 
 // -----------------------------------------------------------------------------
@@ -656,6 +693,7 @@ func joinHeaderBody(header, body string) string {
 func renderPlainContent(v *toolCallCmp, content string) string {
 	t := styles.CurrentTheme()
 	content = strings.ReplaceAll(content, "\r\n", "\n") // Normalize line endings
+	content = strings.ReplaceAll(content, "\t", "    ") // Replace tabs with spaces
 	content = strings.TrimSpace(content)
 	lines := strings.Split(content, "\n")
 
@@ -665,7 +703,7 @@ func renderPlainContent(v *toolCallCmp, content string) string {
 		if i >= responseContextHeight {
 			break
 		}
-		ln = escapeContent(ln)
+		ln = ansiext.Escape(ln)
 		ln = " " + ln // left padding
 		if len(ln) > width {
 			ln = v.fit(ln, width)
@@ -703,7 +741,7 @@ func renderCodeContent(v *toolCallCmp, path, content string, offset int) string 
 
 	lines := strings.Split(truncated, "\n")
 	for i, ln := range lines {
-		lines[i] = escapeContent(ln)
+		lines[i] = ansiext.Escape(ln)
 	}
 
 	highlighted, _ := highlight.SyntaxHighlight(strings.Join(lines, "\n"), path, t.BgBase)
@@ -757,6 +795,8 @@ func prettifyToolName(name string) string {
 		return "Agent"
 	case tools.BashToolName:
 		return "Bash"
+	case tools.DownloadToolName:
+		return "Download"
 	case tools.EditToolName:
 		return "Edit"
 	case tools.FetchToolName:
@@ -776,21 +816,4 @@ func prettifyToolName(name string) string {
 	default:
 		return name
 	}
-}
-
-// escapeContent replaces control characters with their Unicode Control Picture
-// representations to ensure they are displayed correctly in the UI.
-func escapeContent(content string) string {
-	var sb strings.Builder
-	for _, r := range content {
-		switch {
-		case r >= 0 && r <= 0x1f: // Control characters 0x00-0x1F
-			sb.WriteRune('\u2400' + r)
-		case r == ansi.DEL:
-			sb.WriteRune('\u2421')
-		default:
-			sb.WriteRune(r)
-		}
-	}
-	return sb.String()
 }
