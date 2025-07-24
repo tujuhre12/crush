@@ -88,7 +88,7 @@
             inherit version;
             subPackages = [ "." ]; # Build from root directory
             src = self;
-            vendorHash = null;
+            vendorHash = "sha256-DoOYptWZvhAHPT9/m3jAui5KMDdZpIChJboRktM/D9U=";
 
             ldflags = [
               "-s"
@@ -103,7 +103,7 @@
                 --bash <($out/bin/crush completion bash) \
                 --fish <($out/bin/crush completion fish) \
                 --zsh <($out/bin/crush completion zsh)
-              
+
               # Generate and install man page
               $out/bin/crush man > crush.1
               installManPage crush.1
