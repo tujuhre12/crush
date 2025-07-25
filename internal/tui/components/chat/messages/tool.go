@@ -32,6 +32,7 @@ type ToolCallCmp interface {
 	SetIsNested(bool)                  // Set whether this tool call is nested
 	SetPermissionRequested()           // Mark permission request
 	SetPermissionGranted()             // Mark permission granted
+	ID() string
 }
 
 // toolCallCmp implements the ToolCallCmp interface for displaying tool calls.
@@ -337,4 +338,8 @@ func (m *toolCallCmp) SetPermissionRequested() {
 // SetPermissionGranted marks that permission was granted for this tool call
 func (m *toolCallCmp) SetPermissionGranted() {
 	m.permissionGranted = true
+}
+
+func (m *toolCallCmp) ID() string {
+	return m.call.ID
 }
