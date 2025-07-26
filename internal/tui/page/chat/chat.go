@@ -165,7 +165,7 @@ func (p *chatPage) Init() tea.Cmd {
 		
 		// If we have an initial prompt, automatically send it
 		if p.initialPrompt != "" {
-			cmds = append(cmds, p.editor.SendMessage())
+			cmds = append(cmds, p.editor.Send())
 		}
 	}
 
@@ -295,7 +295,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		
 		// If we have an initial prompt, automatically send it after onboarding completes
 		if p.initialPrompt != "" {
-			return p, tea.Batch(p.SetSize(p.width, p.height), p.editor.SendMessage())
+			return p, tea.Batch(p.SetSize(p.width, p.height), p.editor.Send())
 		}
 		
 		return p, p.SetSize(p.width, p.height)

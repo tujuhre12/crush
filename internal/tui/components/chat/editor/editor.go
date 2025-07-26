@@ -37,7 +37,7 @@ type Editor interface {
 	SetSession(session session.Session) tea.Cmd
 	IsCompletionsOpen() bool
 	Cursor() *tea.Cursor
-	SendMessage() tea.Cmd
+	Send() tea.Cmd
 }
 
 type FileCompletionItem struct {
@@ -130,7 +130,7 @@ func (m *editorCmp) Init() tea.Cmd {
 	return nil
 }
 
-func (m *editorCmp) send() tea.Cmd {
+func (m *editorCmp) Send() tea.Cmd {
 	if m.app.CoderAgent == nil {
 		return util.ReportError(fmt.Errorf("coder agent is not initialized"))
 	}
@@ -267,7 +267,7 @@ func (m *editorCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea.SetValue(value[:len(value)-1])
 			} else {
 				// Otherwise, send the message
-				return m, m.send()
+				return m, m.Send()
 			}
 		}
 	}
@@ -443,9 +443,7 @@ func (c *editorCmp) IsCompletionsOpen() bool {
 	return c.isCompletionsOpen
 }
 
-func (c *editorCmp) SendMessage() tea.Cmd {
-	return c.send()
-}
+
 
 func New(app *app.App, initialPrompt string) Editor {
 	t := styles.CurrentTheme()
