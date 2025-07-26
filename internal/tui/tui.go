@@ -493,8 +493,8 @@ func (a *appModel) View() tea.View {
 }
 
 // New creates and initializes a new TUI application model.
-func New(app *app.App) tea.Model {
-	chatPage := chat.New(app)
+func New(app *app.App, initialPrompt string) tea.Model {
+	chatPage := chat.New(app, initialPrompt)
 	keyMap := DefaultKeyMap()
 	keyMap.pageBindings = chatPage.Bindings()
 

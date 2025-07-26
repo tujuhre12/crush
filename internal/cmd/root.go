@@ -43,6 +43,9 @@ to assist developers in writing, debugging, and understanding code directly from
   # Run a single non-interactive prompt with JSON output format
   crush -p "Explain the use of context in Go" -f json
 
+  # Start interactive session with initial prompt
+  crush -i "Explain the use of context in Go"
+
   # Run in dangerous mode (auto-accept all permissions)
   crush -y
   `,
@@ -52,6 +55,7 @@ to assist developers in writing, debugging, and understanding code directly from
 		debug, _ := cmd.Flags().GetBool("debug")
 		cwd, _ := cmd.Flags().GetString("cwd")
 		prompt, _ := cmd.Flags().GetString("prompt")
+		initial, _ := cmd.Flags().GetString("initial")
 		quiet, _ := cmd.Flags().GetBool("quiet")
 		yolo, _ := cmd.Flags().GetBool("yolo")
 
@@ -107,7 +111,7 @@ to assist developers in writing, debugging, and understanding code directly from
 
 		// Set up the TUI.
 		program := tea.NewProgram(
-			tui.New(app),
+			tui.New(app, initial),
 			tea.WithAltScreen(),
 			tea.WithContext(ctx),
 			tea.WithMouseCellMotion(),            // Use cell motion instead of all motion to reduce event flooding
@@ -141,6 +145,7 @@ func init() {
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
 	rootCmd.Flags().BoolP("debug", "d", false, "Debug")
 	rootCmd.Flags().StringP("prompt", "p", "", "Prompt to run in non-interactive mode")
+	rootCmd.Flags().StringP("initial", "i", "", "Initial prompt to start interactive session with")
 	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 
 	// Add quiet flag to hide spinner in non-interactive mode

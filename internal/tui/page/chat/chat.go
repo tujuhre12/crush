@@ -110,19 +110,32 @@ type chatPage struct {
 	splashFullScreen bool
 	isOnboarding     bool
 	isProjectInit    bool
+	
+	// Initial prompt to send automatically
+	initialPrompt string
 }
 
-func New(app *app.App) ChatPage {
-	return &chatPage{
-		app:         app,
-		keyMap:      DefaultKeyMap(),
-		header:      header.New(app.LSPClients),
-		sidebar:     sidebar.New(app.History, app.LSPClients, false),
-		chat:        chat.New(app),
-		editor:      editor.New(app),
-		splash:      splash.New(),
-		focusedPane: PanelTypeSplash,
+func New(app *app.App, initialPrompt string) ChatPage {
+	chatPage := &chatPage{
+		app:           app,
+		keyMap:        DefaultKeyMap(),
+		header:        header.New(app.LSPClients),
+		sidebar:       sidebar.New(app.History, app.LSPClients, false),
+		chat:          chat.New(app),
+		editor:        editor.New(app, initialPrompt),
+		splash:        splash.New(),
+		focusedPane:   PanelTypeSplash,
+		initialPrompt: initialPrompt,
 	}
+
+	// If we have an initial prompt and the app is configured, focus the editor
+	if initialPrompt != "" && config.HasInitialDataConfig() {
+		if b, _ := config.ProjectNeedsInitialization(); !b {
+			chatPage.focusedPane = PanelTypeEditor
+		}
+	}
+
+	return chatPage
 }
 
 func (p *chatPage) Init() tea.Cmd {
@@ -131,6 +144,8 @@ func (p *chatPage) Init() tea.Cmd {
 	p.compact = compact
 	p.forceCompact = compact
 	p.sidebar.SetCompactMode(p.compact)
+
+	var cmds []tea.Cmd
 
 	// Set splash state based on config
 	if !config.HasInitialDataConfig() {
@@ -147,15 +162,22 @@ func (p *chatPage) Init() tea.Cmd {
 		// Ready to chat: focus editor, splash in background
 		p.focusedPane = PanelTypeEditor
 		p.splashFullScreen = false
+		
+		// If we have an initial prompt, automatically send it
+		if p.initialPrompt != "" {
+			cmds = append(cmds, p.editor.SendMessage())
+		}
 	}
 
-	return tea.Batch(
+	cmds = append(cmds,
 		p.header.Init(),
 		p.sidebar.Init(),
 		p.chat.Init(),
 		p.editor.Init(),
 		p.splash.Init(),
 	)
+
+	return tea.Batch(cmds...)
 }
 
 func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -270,6 +292,12 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.isOnboarding = false
 		p.isProjectInit = false
 		p.focusedPane = PanelTypeEditor
+		
+		// If we have an initial prompt, automatically send it after onboarding completes
+		if p.initialPrompt != "" {
+			return p, tea.Batch(p.SetSize(p.width, p.height), p.editor.SendMessage())
+		}
+		
 		return p, p.SetSize(p.width, p.height)
 	case tea.KeyPressMsg:
 		switch {

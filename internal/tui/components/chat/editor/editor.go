@@ -37,6 +37,7 @@ type Editor interface {
 	SetSession(session session.Session) tea.Cmd
 	IsCompletionsOpen() bool
 	Cursor() *tea.Cursor
+	SendMessage() tea.Cmd
 }
 
 type FileCompletionItem struct {
@@ -442,7 +443,11 @@ func (c *editorCmp) IsCompletionsOpen() bool {
 	return c.isCompletionsOpen
 }
 
-func New(app *app.App) Editor {
+func (c *editorCmp) SendMessage() tea.Cmd {
+	return c.send()
+}
+
+func New(app *app.App, initialPrompt string) Editor {
 	t := styles.CurrentTheme()
 	ta := textarea.New()
 	ta.SetStyles(t.S().TextArea)
@@ -461,6 +466,12 @@ func New(app *app.App) Editor {
 	ta.Placeholder = "Tell me more about this project..."
 	ta.SetVirtualCursor(false)
 	ta.Focus()
+
+	// Set initial prompt if provided
+	if initialPrompt != "" {
+		ta.SetValue(initialPrompt)
+		ta.MoveToEnd()
+	}
 
 	return &editorCmp{
 		// TODO: remove the app instance from here
