@@ -33,6 +33,9 @@ type Service interface {
 	ListChildren(ctx context.Context, parentSessionID string) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
 	Delete(ctx context.Context, id string) error
+	SearchByTitle(ctx context.Context, titlePattern string) ([]Session, error)
+	SearchByText(ctx context.Context, textPattern string) ([]Session, error)
+	SearchByTitleAndText(ctx context.Context, titlePattern, textPattern string) ([]Session, error)
 }
 
 type service struct {
@@ -150,6 +153,45 @@ func (s *service) ListChildren(ctx context.Context, parentSessionID string) ([]S
 	dbSessions, err := s.q.ListChildSessions(ctx, sql.NullString{
 		String: parentSessionID,
 		Valid:  true,
+	})
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+	}
+	return sessions, nil
+}
+
+func (s *service) SearchByTitle(ctx context.Context, titlePattern string) ([]Session, error) {
+	dbSessions, err := s.q.SearchSessionsByTitle(ctx, "%"+titlePattern+"%")
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+	}
+	return sessions, nil
+}
+
+func (s *service) SearchByText(ctx context.Context, textPattern string) ([]Session, error) {
+	dbSessions, err := s.q.SearchSessionsByText(ctx, "%"+textPattern+"%")
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]Session, len(dbSessions))
+	for i, dbSession := range dbSessions {
+		sessions[i] = s.fromDBItem(dbSession)
+	}
+	return sessions, nil
+}
+
+func (s *service) SearchByTitleAndText(ctx context.Context, titlePattern, textPattern string) ([]Session, error) {
+	dbSessions, err := s.q.SearchSessionsByTitleAndText(ctx, db.SearchSessionsByTitleAndTextParams{
+		Title: "%" + titlePattern + "%",
+		Parts: "%" + textPattern + "%",
 	})
 	if err != nil {
 		return nil, err

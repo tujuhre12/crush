@@ -106,6 +106,205 @@ func (q *Queries) GetSessionByID(ctx context.Context, id string) (Session, error
 	return i, err
 }
 
+const getSessionStats = `-- name: GetSessionStats :one
+SELECT 
+    COUNT(*) as total_sessions,
+    SUM(message_count) as total_messages,
+    SUM(prompt_tokens) as total_prompt_tokens,
+    SUM(completion_tokens) as total_completion_tokens,
+    SUM(cost) as total_cost,
+    AVG(cost) as avg_cost_per_session
+FROM sessions
+`
+
+type GetSessionStatsRow struct {
+	TotalSessions         int64           `json:"total_sessions"`
+	TotalMessages         sql.NullFloat64 `json:"total_messages"`
+	TotalPromptTokens     sql.NullFloat64 `json:"total_prompt_tokens"`
+	TotalCompletionTokens sql.NullFloat64 `json:"total_completion_tokens"`
+	TotalCost             sql.NullFloat64 `json:"total_cost"`
+	AvgCostPerSession     sql.NullFloat64 `json:"avg_cost_per_session"`
+}
+
+func (q *Queries) GetSessionStats(ctx context.Context) (GetSessionStatsRow, error) {
+	row := q.queryRow(ctx, q.getSessionStatsStmt, getSessionStats)
+	var i GetSessionStatsRow
+	err := row.Scan(
+		&i.TotalSessions,
+		&i.TotalMessages,
+		&i.TotalPromptTokens,
+		&i.TotalCompletionTokens,
+		&i.TotalCost,
+		&i.AvgCostPerSession,
+	)
+	return i, err
+}
+
+const getSessionStatsByDay = `-- name: GetSessionStatsByDay :many
+SELECT 
+    date(created_at, 'unixepoch') as day,
+    COUNT(*) as session_count,
+    SUM(message_count) as message_count,
+    SUM(prompt_tokens) as prompt_tokens,
+    SUM(completion_tokens) as completion_tokens,
+    SUM(cost) as total_cost,
+    AVG(cost) as avg_cost
+FROM sessions
+GROUP BY date(created_at, 'unixepoch')
+ORDER BY day DESC
+`
+
+type GetSessionStatsByDayRow struct {
+	Day              interface{}     `json:"day"`
+	SessionCount     int64           `json:"session_count"`
+	MessageCount     sql.NullFloat64 `json:"message_count"`
+	PromptTokens     sql.NullFloat64 `json:"prompt_tokens"`
+	CompletionTokens sql.NullFloat64 `json:"completion_tokens"`
+	TotalCost        sql.NullFloat64 `json:"total_cost"`
+	AvgCost          sql.NullFloat64 `json:"avg_cost"`
+}
+
+func (q *Queries) GetSessionStatsByDay(ctx context.Context) ([]GetSessionStatsByDayRow, error) {
+	rows, err := q.query(ctx, q.getSessionStatsByDayStmt, getSessionStatsByDay)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSessionStatsByDayRow{}
+	for rows.Next() {
+		var i GetSessionStatsByDayRow
+		if err := rows.Scan(
+			&i.Day,
+			&i.SessionCount,
+			&i.MessageCount,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.TotalCost,
+			&i.AvgCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSessionStatsByMonth = `-- name: GetSessionStatsByMonth :many
+SELECT 
+    strftime('%Y-%m', datetime(created_at, 'unixepoch')) as month,
+    COUNT(*) as session_count,
+    SUM(message_count) as message_count,
+    SUM(prompt_tokens) as prompt_tokens,
+    SUM(completion_tokens) as completion_tokens,
+    SUM(cost) as total_cost,
+    AVG(cost) as avg_cost
+FROM sessions
+GROUP BY strftime('%Y-%m', datetime(created_at, 'unixepoch'))
+ORDER BY month DESC
+`
+
+type GetSessionStatsByMonthRow struct {
+	Month            interface{}     `json:"month"`
+	SessionCount     int64           `json:"session_count"`
+	MessageCount     sql.NullFloat64 `json:"message_count"`
+	PromptTokens     sql.NullFloat64 `json:"prompt_tokens"`
+	CompletionTokens sql.NullFloat64 `json:"completion_tokens"`
+	TotalCost        sql.NullFloat64 `json:"total_cost"`
+	AvgCost          sql.NullFloat64 `json:"avg_cost"`
+}
+
+func (q *Queries) GetSessionStatsByMonth(ctx context.Context) ([]GetSessionStatsByMonthRow, error) {
+	rows, err := q.query(ctx, q.getSessionStatsByMonthStmt, getSessionStatsByMonth)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSessionStatsByMonthRow{}
+	for rows.Next() {
+		var i GetSessionStatsByMonthRow
+		if err := rows.Scan(
+			&i.Month,
+			&i.SessionCount,
+			&i.MessageCount,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.TotalCost,
+			&i.AvgCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSessionStatsByWeek = `-- name: GetSessionStatsByWeek :many
+SELECT 
+    date(created_at, 'unixepoch', 'weekday 0', '-6 days') as week_start,
+    COUNT(*) as session_count,
+    SUM(message_count) as message_count,
+    SUM(prompt_tokens) as prompt_tokens,
+    SUM(completion_tokens) as completion_tokens,
+    SUM(cost) as total_cost,
+    AVG(cost) as avg_cost
+FROM sessions
+GROUP BY date(created_at, 'unixepoch', 'weekday 0', '-6 days')
+ORDER BY week_start DESC
+`
+
+type GetSessionStatsByWeekRow struct {
+	WeekStart        interface{}     `json:"week_start"`
+	SessionCount     int64           `json:"session_count"`
+	MessageCount     sql.NullFloat64 `json:"message_count"`
+	PromptTokens     sql.NullFloat64 `json:"prompt_tokens"`
+	CompletionTokens sql.NullFloat64 `json:"completion_tokens"`
+	TotalCost        sql.NullFloat64 `json:"total_cost"`
+	AvgCost          sql.NullFloat64 `json:"avg_cost"`
+}
+
+func (q *Queries) GetSessionStatsByWeek(ctx context.Context) ([]GetSessionStatsByWeekRow, error) {
+	rows, err := q.query(ctx, q.getSessionStatsByWeekStmt, getSessionStatsByWeek)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSessionStatsByWeekRow{}
+	for rows.Next() {
+		var i GetSessionStatsByWeekRow
+		if err := rows.Scan(
+			&i.WeekStart,
+			&i.SessionCount,
+			&i.MessageCount,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.TotalCost,
+			&i.AvgCost,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllSessions = `-- name: ListAllSessions :many
 SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id
 FROM sessions
@@ -196,6 +395,136 @@ ORDER BY created_at DESC
 
 func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 	rows, err := q.query(ctx, q.listSessionsStmt, listSessions)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentSessionID,
+			&i.Title,
+			&i.MessageCount,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.Cost,
+			&i.UpdatedAt,
+			&i.CreatedAt,
+			&i.SummaryMessageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSessionsByText = `-- name: SearchSessionsByText :many
+SELECT DISTINCT s.id, s.parent_session_id, s.title, s.message_count, s.prompt_tokens, s.completion_tokens, s.cost, s.updated_at, s.created_at, s.summary_message_id
+FROM sessions s
+JOIN messages m ON s.id = m.session_id
+WHERE m.parts LIKE ?
+ORDER BY s.created_at DESC
+`
+
+func (q *Queries) SearchSessionsByText(ctx context.Context, parts string) ([]Session, error) {
+	rows, err := q.query(ctx, q.searchSessionsByTextStmt, searchSessionsByText, parts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentSessionID,
+			&i.Title,
+			&i.MessageCount,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.Cost,
+			&i.UpdatedAt,
+			&i.CreatedAt,
+			&i.SummaryMessageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSessionsByTitle = `-- name: SearchSessionsByTitle :many
+SELECT id, parent_session_id, title, message_count, prompt_tokens, completion_tokens, cost, updated_at, created_at, summary_message_id
+FROM sessions
+WHERE title LIKE ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) SearchSessionsByTitle(ctx context.Context, title string) ([]Session, error) {
+	rows, err := q.query(ctx, q.searchSessionsByTitleStmt, searchSessionsByTitle, title)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.ParentSessionID,
+			&i.Title,
+			&i.MessageCount,
+			&i.PromptTokens,
+			&i.CompletionTokens,
+			&i.Cost,
+			&i.UpdatedAt,
+			&i.CreatedAt,
+			&i.SummaryMessageID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSessionsByTitleAndText = `-- name: SearchSessionsByTitleAndText :many
+SELECT DISTINCT s.id, s.parent_session_id, s.title, s.message_count, s.prompt_tokens, s.completion_tokens, s.cost, s.updated_at, s.created_at, s.summary_message_id
+FROM sessions s
+JOIN messages m ON s.id = m.session_id
+WHERE s.title LIKE ? AND m.parts LIKE ?
+ORDER BY s.created_at DESC
+`
+
+type SearchSessionsByTitleAndTextParams struct {
+	Title string `json:"title"`
+	Parts string `json:"parts"`
+}
+
+func (q *Queries) SearchSessionsByTitleAndText(ctx context.Context, arg SearchSessionsByTitleAndTextParams) ([]Session, error) {
+	rows, err := q.query(ctx, q.searchSessionsByTitleAndTextStmt, searchSessionsByTitleAndText, arg.Title, arg.Parts)
 	if err != nil {
 		return nil, err
 	}

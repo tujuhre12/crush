@@ -22,6 +22,10 @@ type Querier interface {
 	GetFileByPathAndSession(ctx context.Context, arg GetFileByPathAndSessionParams) (File, error)
 	GetMessage(ctx context.Context, id string) (Message, error)
 	GetSessionByID(ctx context.Context, id string) (Session, error)
+	GetSessionStats(ctx context.Context) (GetSessionStatsRow, error)
+	GetSessionStatsByDay(ctx context.Context) ([]GetSessionStatsByDayRow, error)
+	GetSessionStatsByMonth(ctx context.Context) ([]GetSessionStatsByMonthRow, error)
+	GetSessionStatsByWeek(ctx context.Context) ([]GetSessionStatsByWeekRow, error)
 	ListAllSessions(ctx context.Context) ([]Session, error)
 	ListChildSessions(ctx context.Context, parentSessionID sql.NullString) ([]Session, error)
 	ListFilesByPath(ctx context.Context, path string) ([]File, error)
@@ -30,6 +34,9 @@ type Querier interface {
 	ListMessagesBySession(ctx context.Context, sessionID string) ([]Message, error)
 	ListNewFiles(ctx context.Context) ([]File, error)
 	ListSessions(ctx context.Context) ([]Session, error)
+	SearchSessionsByText(ctx context.Context, parts string) ([]Session, error)
+	SearchSessionsByTitle(ctx context.Context, title string) ([]Session, error)
+	SearchSessionsByTitleAndText(ctx context.Context, arg SearchSessionsByTitleAndTextParams) ([]Session, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) error
 	UpdateSession(ctx context.Context, arg UpdateSessionParams) (Session, error)
 }
