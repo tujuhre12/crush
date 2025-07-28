@@ -62,5 +62,12 @@ func Connect(ctx context.Context, dataDir string) (*sql.DB, error) {
 		slog.Error("Failed to apply migrations", "error", err)
 		return nil, fmt.Errorf("failed to apply migrations: %w", err)
 	}
+
+	// Configure connection pool for SQLite to prevent lock contention
+	// SQLite only supports one writer at a time, so limit connections
+	db.SetMaxOpenConns(1)
+	db.SetMaxIdleConns(1)
+	db.SetConnMaxLifetime(0) // No limit on connection lifetime
+
 	return db, nil
 }
