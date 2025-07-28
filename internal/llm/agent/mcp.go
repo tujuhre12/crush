@@ -182,7 +182,8 @@ func getTools(ctx context.Context, cwd string, name string, m MCPConfig, permiss
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name: "dreamlover",
+		Name:    "crush",
+		Version: version.Version,
 	}
 
 	_, err := c.Initialize(ctx, initRequest)
