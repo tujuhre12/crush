@@ -41,11 +41,11 @@ func init() {
 }
 
 // NewWorkspaceWatcher creates a new workspace watcher
-func NewWorkspaceWatcher(name string, client *lsp.Client, debub bool) *WorkspaceWatcher {
+func NewWorkspaceWatcher(name string, client *lsp.Client, debug bool) *WorkspaceWatcher {
 	return &WorkspaceWatcher{
 		name:          name,
 		client:        client,
-		debug:         debub,
+		debug:         debug,
 		debounceTime:  300 * time.Millisecond,
 		debounceMap:   csync.NewMap[string, *time.Timer](),
 		registrations: []protocol.FileSystemWatcher{},
