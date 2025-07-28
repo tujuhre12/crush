@@ -128,8 +128,7 @@ type Config struct {
 	Permissions *Permissions `json:"permissions,omitempty"`
 
 	// Internal
-	workingDir string `json:"-"`
-	// TODO: find a better way to do this this should probably not be part of the config
+	workingDir     string `json:"-"`
 	resolver       resolver.Resolver
 	dataConfigDir  string             `json:"-"`
 	knownProviders []catwalk.Provider `json:"-"`
