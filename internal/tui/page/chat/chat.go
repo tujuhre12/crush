@@ -164,7 +164,7 @@ func (p *chatPage) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyboardEnhancementsMsg:
 		p.keyboardEnhancements = msg
 		return p, nil
-	case tea.MouseWheelMsg:
+	case tea.MouseMsg:
 		if p.isMouseOverChat(msg.Mouse().X, msg.Mouse().Y) {
 			u, cmd := p.chat.Update(msg)
 			p.chat = u.(chat.MessageListCmp)

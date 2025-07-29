@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/exp/list"
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 type SendMsg struct {
@@ -56,6 +57,8 @@ type messageListCmp struct {
 
 	lastUserMessageTime int64
 	defaultListKeyMap   list.KeyMap
+
+	selStart, selEnd uv.Position
 }
 
 // New creates a new message list component with custom keybindings
@@ -85,6 +88,7 @@ func (m *messageListCmp) Init() tea.Cmd {
 
 // Update handles incoming messages and updates the component state.
 func (m *messageListCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
 	switch msg := msg.(type) {
 	case pubsub.Event[permission.PermissionNotification]:
 		return m, m.handlePermissionRequest(msg.Payload)
@@ -102,29 +106,78 @@ func (m *messageListCmp) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.handleMessageEvent(msg)
 		return m, cmd
 
+	case tea.MouseClickMsg:
+		if msg.Button == tea.MouseLeft {
+			m.listCmp.StartSelection(msg.X, msg.Y)
+		}
+
+	case tea.MouseMotionMsg:
+		if msg.Button == tea.MouseLeft {
+			m.listCmp.EndSelection(msg.X, msg.Y)
+			if msg.Y <= 1 {
+				// Scroll up while dragging the mouse
+				cmds = append(cmds, m.listCmp.MoveUp(1))
+			} else if msg.Y >= m.height-1 {
+				// Scroll down while dragging the mouse
+				cmds = append(cmds, m.listCmp.MoveDown(1))
+			}
+		}
+
+	case tea.MouseReleaseMsg:
+		if msg.Button == tea.MouseLeft {
+			m.listCmp.EndSelection(msg.X, msg.Y)
+		}
+
 	case tea.MouseWheelMsg:
 		u, cmd := m.listCmp.Update(msg)
 		m.listCmp = u.(list.List[list.Item])
 		return m, cmd
-	default:
-		var cmds []tea.Cmd
-		u, cmd := m.listCmp.Update(msg)
-		m.listCmp = u.(list.List[list.Item])
-		cmds = append(cmds, cmd)
-		return m, tea.Batch(cmds...)
 	}
+
+	u, cmd := m.listCmp.Update(msg)
+	m.listCmp = u.(list.List[list.Item])
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
 }
+
+var zeroPos = uv.Position{}
 
 // View renders the message list or an initial screen if empty.
 func (m *messageListCmp) View() string {
 	t := styles.CurrentTheme()
-	return t.S().Base.
+	view := t.S().Base.
 		Padding(1, 1, 0, 1).
 		Width(m.width).
 		Height(m.height).
 		Render(
 			m.listCmp.View(),
 		)
+
+	area := uv.Rect(0, 0, m.width, m.height)
+	scr := uv.NewScreenBuffer(area.Dx(), area.Dy())
+	uv.NewStyledString(view).Draw(scr, area)
+	if m.selStart != zeroPos && m.selEnd != zeroPos {
+		selArea := uv.Rectangle{
+			Min: m.selStart,
+			Max: m.selEnd,
+		}
+		if m.selStart.X > m.selEnd.X || (m.selStart.X == m.selEnd.X && m.selStart.Y > m.selEnd.Y) {
+			selArea.Min, selArea.Max = selArea.Max, selArea.Min
+		}
+		for y := 0; y < area.Dy(); y++ {
+			for x := 0; x < area.Dx(); x++ {
+				cell := scr.CellAt(x, y)
+				if cell != nil && uv.Pos(x, y).In(selArea) {
+					cell = cell.Clone()
+					cell.Style = cell.Style.Reverse(true)
+					scr.SetCell(x, y, cell)
+				}
+			}
+		}
+	}
+
+	return scr.Render()
 }
 
 func (m *messageListCmp) handlePermissionRequest(permission permission.PermissionNotification) tea.Cmd {

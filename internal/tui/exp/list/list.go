@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/crush/internal/tui/styles"
 	"github.com/charmbracelet/crush/internal/tui/util"
 	"github.com/charmbracelet/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
 )
 
 type Item interface {
@@ -45,6 +46,8 @@ type List[T Item] interface {
 	DeleteItem(string) tea.Cmd
 	PrependItem(T) tea.Cmd
 	AppendItem(T) tea.Cmd
+	StartSelection(col, line int)
+	EndSelection(col, line int)
 }
 
 type direction int
@@ -93,6 +96,11 @@ type list[T Item] struct {
 	rendered string
 
 	movingByItem bool
+
+	selectionStartCol  int
+	selectionStartLine int
+	selectionEndCol    int
+	selectionEndLine   int
 }
 
 type ListOption func(*confOptions)
@@ -185,6 +193,20 @@ func New[T Item](items []T, opts ...ListOption) List[T] {
 		list.indexMap.Set(item.ID(), inx)
 	}
 	return list
+}
+
+// StartSelection implements List.
+func (l *list[T]) StartSelection(col, line int) {
+	l.selectionStartCol = col
+	l.selectionStartLine = line
+	l.selectionEndCol = col
+	l.selectionEndLine = line
+}
+
+// EndSelection implements List.
+func (l *list[T]) EndSelection(col, line int) {
+	l.selectionEndCol = col
+	l.selectionEndLine = line
 }
 
 // Init implements List.
@@ -280,10 +302,39 @@ func (l *list[T]) View() string {
 	if l.resize {
 		return strings.Join(lines, "\n")
 	}
-	return t.S().Base.
+
+	view = t.S().Base.
 		Height(l.height).
 		Width(l.width).
 		Render(strings.Join(lines, "\n"))
+
+	area := uv.Rect(0, 0, l.width, l.height)
+	scr := uv.NewScreenBuffer(area.Dx(), area.Dy())
+	uv.NewStyledString(view).Draw(scr, area)
+	selArea := uv.Rectangle{
+		Min: uv.Pos(l.selectionStartCol, l.selectionStartLine),
+		Max: uv.Pos(l.selectionEndCol, l.selectionEndLine),
+	}
+	selArea = selArea.Canon()
+	for y := 0; y < scr.Height(); y++ {
+		for x := 0; x < scr.Width(); x++ {
+			cell := scr.CellAt(x, y)
+			firstLine := y == selArea.Min.Y && x >= l.selectionStartCol && x < scr.Width()
+			lastLine := y == selArea.Max.Y-1 && x >= 0 && x < l.selectionEndCol
+			middleLine := y > selArea.Min.Y && y < selArea.Max.Y-1 && x >= 0 && x < scr.Width()
+			if cell != nil &&
+				(y >= selArea.Min.Y && y < selArea.Max.Y) &&
+				(firstLine || // First line until the end
+					lastLine || // Last line until the end
+					middleLine) { // Middle lines
+				cell = cell.Clone()
+				cell.Style = cell.Style.Reverse(true)
+				scr.SetCell(x, y, cell)
+			}
+		}
+	}
+
+	return scr.Render()
 }
 
 func (l *list[T]) viewPosition() (int, int) {
