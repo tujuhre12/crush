@@ -125,12 +125,12 @@ crush run -q "Generate a README for this project"
 }
 
 var updateCmd = &cobra.Command{
-	Use:   "update",
+	Use:   "check-update",
 	Short: "Check for updates",
 	Long:  `Check if a new version of crush is available.`,
 	Example: `
 # Check for updates
-crush update
+crush check-update
   `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("Checking for updates...")
