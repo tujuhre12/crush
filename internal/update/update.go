@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -122,4 +123,29 @@ func compareVersions(v1, v2 string) int {
 	}
 
 	return 0
+}
+
+// CheckForUpdateAsync performs an update check in the background and returns immediately.
+// If an update is available, it returns the update info through the channel.
+func CheckForUpdateAsync(ctx context.Context, dataDir string) <-chan *UpdateInfo {
+	ch := make(chan *UpdateInfo, 1)
+
+	go func() {
+		defer close(ch)
+
+		// Perform the check.
+		info, err := CheckForUpdate(ctx)
+		if err != nil {
+			// Log error but don't fail.
+			fmt.Fprintf(os.Stderr, "Failed to check for updates: %v\n", err)
+			return
+		}
+
+		// Send update info if available.
+		if info.Available {
+			ch <- info
+		}
+	}()
+
+	return ch
 }
