@@ -39,7 +39,7 @@ func CheckForUpdate(ctx context.Context) (*UpdateInfo, error) {
 	}
 
 	// Skip update check for development versions.
-	if strings.Contains(version.Version, "unknown") || strings.Contains(version.Version, "devel") {
+	if strings.Contains(version.Version, "unknown") {
 		return info, nil
 	}
 

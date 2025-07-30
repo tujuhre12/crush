@@ -345,7 +345,7 @@ func (app *App) Shutdown() {
 // checkForUpdates checks for available updates in the background.
 func (app *App) checkForUpdates(ctx context.Context) {
 	// Use a timeout to avoid hanging indefinitely.
-	checkCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	// Check for updates asynchronously.
