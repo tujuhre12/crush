@@ -350,7 +350,7 @@ func (app *App) checkForUpdates(ctx context.Context) {
 
 	// Check for updates asynchronously.
 	updateCh := update.CheckForUpdateAsync(checkCtx, app.config.Options.DataDirectory)
-	
+
 	select {
 	case info := <-updateCh:
 		if info != nil && info.Available {

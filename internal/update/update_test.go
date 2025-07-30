@@ -70,7 +70,7 @@ func TestCompareVersions(t *testing.T) {
 func TestCheckForUpdate_DevelopmentVersion(t *testing.T) {
 	// Test that development versions don't trigger updates.
 	ctx := context.Background()
-	
+
 	// Temporarily set version to development version.
 	originalVersion := version.Version
 	version.Version = "unknown"
