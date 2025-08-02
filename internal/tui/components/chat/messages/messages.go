@@ -175,6 +175,7 @@ func (m *messageCmp) renderAssistantMessage() string {
 	finished := m.message.IsFinished()
 	finishedData := m.message.FinishPart()
 	thinkingContent := ""
+	retryContent := m.renderRetryContent()
 
 	if thinking || m.message.ReasoningContent().Thinking != "" {
 		m.anim.SetLabel("Thinking")
@@ -192,12 +193,19 @@ func (m *messageCmp) renderAssistantMessage() string {
 		return m.style().Render(errorContent)
 	}
 
+	if retryContent != "" {
+		parts = append(parts, retryContent)
+	}
+
 	if thinkingContent != "" {
+		if retryContent != "" {
+			parts = append(parts, "")
+		}
 		parts = append(parts, thinkingContent)
 	}
 
 	if content != "" {
-		if thinkingContent != "" {
+		if thinkingContent != "" || retryContent != "" {
 			parts = append(parts, "")
 		}
 		parts = append(parts, m.toMarkdown(content))
@@ -290,8 +298,68 @@ func (m *messageCmp) renderThinkingContent() string {
 	return lineStyle.Width(m.textWidth()).Padding(0, 1).Render(m.thinkingViewport.View()) + "\n\n" + footer
 }
 
+func (m *messageCmp) renderRetryContent() string {
+	t := styles.CurrentTheme()
+	retryContent := m.message.RetryContent()
+	if retryContent == nil || len(retryContent.Retries) == 0 {
+		return ""
+	}
+
+	// Get the latest retry for the main display
+	latestRetry := retryContent.Retries[len(retryContent.Retries)-1]
+
+	var title string
+	var details string
+	retryDuration := time.Duration(latestRetry.RetryAfter) * time.Millisecond
+
+	if strings.Contains(latestRetry.Error, "426") || strings.Contains(strings.ToLower(latestRetry.Error), "rate limited") {
+		// Rate limit retry
+		warningTag := t.S().Base.Padding(0, 1).Background(t.Warning).Foreground(t.BgBase).Render("RATE LIMITED")
+		retryMsg := fmt.Sprintf("Retrying after %s", retryDuration.String())
+		title = fmt.Sprintf("%s %s", warningTag, t.S().Base.Foreground(t.FgHalfMuted).Render(retryMsg))
+	} else {
+		// Error retry
+		warningTag := t.S().Base.Padding(0, 1).Background(t.Warning).Foreground(t.BgBase).Render("RETRYING")
+		truncated := ansi.Truncate(latestRetry.Error, m.textWidth()-2-lipgloss.Width(warningTag), "...")
+		title = fmt.Sprintf("%s %s", warningTag, t.S().Base.Foreground(t.FgHalfMuted).Render(truncated))
+	}
+
+	// Show retry history as details
+	if len(retryContent.Retries) > 1 {
+		var retryHistory []string
+
+		for i, retry := range retryContent.Retries {
+			timestamp := time.Unix(retry.Timestamp, 0).Format("15:04:05")
+			retryDuration := time.Duration(retry.RetryAfter) * time.Millisecond
+			var retryMsg string
+			if retry.Error == "" {
+				retryMsg = fmt.Sprintf("Rate limited, retrying after %s", retryDuration.String())
+			} else {
+				retryMsg = fmt.Sprintf("Error: %s (retry after %s)", retry.Error, retryDuration.String())
+			}
+			retryHistory = append(retryHistory, fmt.Sprintf("Attempt %d (%s): %s", i+1, timestamp, retryMsg))
+		}
+		details = strings.Join(retryHistory, "\n")
+	} else {
+		// Single retry, show timestamp
+		timestamp := time.Unix(latestRetry.Timestamp, 0).Format("15:04:05")
+		details = fmt.Sprintf("First attempt at %s", timestamp)
+	}
+
+	// Add current status if actively retrying
+	if retryContent.Retrying {
+		details += "\n\nCurrently retrying..."
+	}
+
+	detailsFormatted := t.S().Base.Foreground(t.FgSubtle).Width(m.textWidth() - 2).Render(details)
+	retryDisplay := fmt.Sprintf("%s\n\n%s", title, detailsFormatted)
+
+	return retryDisplay
+}
+
 // shouldSpin determines whether the message should show a loading animation.
 // Only assistant messages without content that aren't finished should spin.
+// Also considers retry state - only spins when actively retrying.
 func (m *messageCmp) shouldSpin() bool {
 	if m.message.Role != message.Assistant {
 		return false
@@ -299,6 +367,11 @@ func (m *messageCmp) shouldSpin() bool {
 
 	if m.message.IsFinished() {
 		return false
+	}
+
+	// Check retry state - only spin if actively retrying
+	if retryContent := m.message.RetryContent(); retryContent != nil {
+		return retryContent.Retrying
 	}
 
 	if m.message.Content().Text != "" {

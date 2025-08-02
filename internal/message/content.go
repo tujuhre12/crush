@@ -113,6 +113,19 @@ type Finish struct {
 
 func (Finish) isPart() {}
 
+type Retry struct {
+	Error      string `json:"error"`
+	RetryAfter int64  `json:"retry_after"`
+	Timestamp  int64  `json:"timestamp"`
+}
+
+type RetryContent struct {
+	Retries  []Retry `json:"retries"`
+	Retrying bool    `json:"retrying"`
+}
+
+func (RetryContent) isPart() {}
+
 type Message struct {
 	ID        string
 	Role      MessageRole
@@ -383,4 +396,73 @@ func (m *Message) AddImageURL(url, detail string) {
 
 func (m *Message) AddBinary(mimeType string, data []byte) {
 	m.Parts = append(m.Parts, BinaryContent{MIMEType: mimeType, Data: data})
+}
+
+func (m *Message) RetryContent() *RetryContent {
+	for _, part := range m.Parts {
+		if c, ok := part.(RetryContent); ok {
+			return &c
+		}
+	}
+	return nil
+}
+
+func (m *Message) AddRetry(error string, retryAfter int64) {
+	retry := Retry{
+		Error:      error,
+		RetryAfter: retryAfter,
+		Timestamp:  time.Now().Unix(),
+	}
+
+	found := false
+	for i, part := range m.Parts {
+		if c, ok := part.(RetryContent); ok {
+			m.Parts[i] = RetryContent{
+				Retries:  append(c.Retries, retry),
+				Retrying: c.Retrying,
+			}
+			found = true
+			break
+		}
+	}
+	if !found {
+		m.Parts = append(m.Parts, RetryContent{
+			Retries:  []Retry{retry},
+			Retrying: false,
+		})
+	}
+}
+
+func (m *Message) SetRetrying(retrying bool) {
+	found := false
+	for i, part := range m.Parts {
+		if c, ok := part.(RetryContent); ok {
+			m.Parts[i] = RetryContent{
+				Retries:  c.Retries,
+				Retrying: retrying,
+			}
+			found = true
+			break
+		}
+	}
+	if !found && retrying {
+		m.Parts = append(m.Parts, RetryContent{
+			Retries:  []Retry{},
+			Retrying: retrying,
+		})
+	}
+}
+
+func (m *Message) IsRetrying() bool {
+	if retryContent := m.RetryContent(); retryContent != nil {
+		return retryContent.Retrying
+	}
+	return false
+}
+
+func (m *Message) GetRetries() []Retry {
+	if retryContent := m.RetryContent(); retryContent != nil {
+		return retryContent.Retries
+	}
+	return []Retry{}
 }

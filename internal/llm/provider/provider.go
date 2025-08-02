@@ -26,6 +26,8 @@ const (
 	EventComplete       EventType = "complete"
 	EventError          EventType = "error"
 	EventWarning        EventType = "warning"
+	EventRetry          EventType = "retry"
+	EventRetrying       EventType = "retrying"
 )
 
 type TokenUsage struct {
@@ -50,6 +52,7 @@ type ProviderEvent struct {
 	Signature string
 	Response  *ProviderResponse
 	ToolCall  *message.ToolCall
+	Retry     int64
 	Error     error
 }
 type Provider interface {

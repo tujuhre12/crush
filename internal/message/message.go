@@ -172,6 +172,7 @@ const (
 	toolCallType   partType = "tool_call"
 	toolResultType partType = "tool_result"
 	finishType     partType = "finish"
+	retryType      partType = "retry"
 )
 
 type partWrapper struct {
@@ -200,6 +201,8 @@ func marshallParts(parts []ContentPart) ([]byte, error) {
 			typ = toolResultType
 		case Finish:
 			typ = finishType
+		case RetryContent:
+			typ = retryType
 		default:
 			return nil, fmt.Errorf("unknown part type: %T", part)
 		}
@@ -269,6 +272,12 @@ func unmarshallParts(data []byte) ([]ContentPart, error) {
 			parts = append(parts, part)
 		case finishType:
 			part := Finish{}
+			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
+				return nil, err
+			}
+			parts = append(parts, part)
+		case retryType:
+			part := RetryContent{}
 			if err := json.Unmarshal(wrapper.Data, &part); err != nil {
 				return nil, err
 			}

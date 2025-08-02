@@ -634,7 +634,23 @@ func (a *agent) processEvent(ctx context.Context, sessionID string, assistantMsg
 		assistantMsg.FinishToolCall(event.ToolCall.ID)
 		return a.messages.Update(ctx, *assistantMsg)
 	case provider.EventError:
+		assistantMsg.SetRetrying(false)
+		if err := a.messages.Update(ctx, *assistantMsg); err != nil {
+			return fmt.Errorf("failed to update message: %w", err)
+		}
 		return event.Error
+	case provider.EventRetry:
+		errMsg := ""
+		if event.Error != nil {
+			errMsg = event.Error.Error()
+		}
+		assistantMsg.SetRetrying(false)
+		assistantMsg.AddRetry(errMsg, event.Retry)
+		return a.messages.Update(ctx, *assistantMsg)
+	case provider.EventRetrying:
+		assistantMsg.SetRetrying(true)
+		return a.messages.Update(ctx, *assistantMsg)
+
 	case provider.EventComplete:
 		assistantMsg.FinishThinking()
 		assistantMsg.SetToolCalls(event.Response.ToolCalls)

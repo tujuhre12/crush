@@ -461,13 +461,11 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 
 			// If there is an error we are going to see if we can retry the call
 			retry, after, retryErr := o.shouldRetry(attempts, err)
-			if retryErr != nil {
-				eventChan <- ProviderEvent{Type: EventError, Error: retryErr}
-				close(eventChan)
-				return
-			}
 			if retry {
-				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
+				if retryErr == nil {
+					slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
+				}
+				eventChan <- ProviderEvent{Type: EventRetry, Error: retryErr, Retry: after}
 				select {
 				case <-ctx.Done():
 					// context cancelled
@@ -477,6 +475,7 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 					close(eventChan)
 					return
 				case <-time.After(time.Duration(after) * time.Millisecond):
+					eventChan <- ProviderEvent{Type: EventRetry, Error: retryErr}
 					continue
 				}
 			}
@@ -534,7 +533,7 @@ func (o *openaiClient) shouldRetry(attempts int, err error) (bool, int64, error)
 			retryMs = retryMs * 1000
 		}
 	}
-	return true, int64(retryMs), nil
+	return true, int64(retryMs), err
 }
 
 func (o *openaiClient) toolCalls(completion openai.ChatCompletion) []message.ToolCall {
