@@ -168,8 +168,8 @@ func (c *Config) configureProviders(env env.Env, resolver VariableResolver, know
 				}
 				continue
 			}
-			prepared.ExtraParams["project"] = env.Get("GOOGLE_CLOUD_PROJECT")
-			prepared.ExtraParams["location"] = env.Get("GOOGLE_CLOUD_LOCATION")
+			prepared.ExtraParams["project"] = env.Get("VERTEXAI_PROJECT")
+			prepared.ExtraParams["location"] = env.Get("VERTEXAI_LOCATION")
 		case catwalk.InferenceProviderAzure:
 			endpoint, err := resolver.ResolveValue(p.APIEndpoint)
 			if err != nil || endpoint == "" {
@@ -188,6 +188,10 @@ func (c *Config) configureProviders(env env.Env, resolver VariableResolver, know
 					c.Providers.Del(string(p.ID))
 				}
 				continue
+			}
+			prepared.ExtraParams["region"] = env.Get("AWS_REGION")
+			if prepared.ExtraParams["region"] == "" {
+				prepared.ExtraParams["region"] = env.Get("AWS_DEFAULT_REGION")
 			}
 			for _, model := range p.Models {
 				if !strings.HasPrefix(model.ID, "anthropic.") {
@@ -466,10 +470,9 @@ func loadFromReaders(readers []io.Reader) (*Config, error) {
 }
 
 func hasVertexCredentials(env env.Env) bool {
-	useVertex := env.Get("GOOGLE_GENAI_USE_VERTEXAI") == "true"
-	hasProject := env.Get("GOOGLE_CLOUD_PROJECT") != ""
-	hasLocation := env.Get("GOOGLE_CLOUD_LOCATION") != ""
-	return useVertex && hasProject && hasLocation
+	hasProject := env.Get("VERTEXAI_PROJECT") != ""
+	hasLocation := env.Get("VERTEXAI_LOCATION") != ""
+	return hasProject && hasLocation
 }
 
 func hasAWSCredentials(env env.Env) bool {

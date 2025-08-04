@@ -160,6 +160,7 @@ func NewProvider(cfg config.ProviderConfig, opts ...ProviderClientOption) (Provi
 		apiKey:             resolvedAPIKey,
 		extraHeaders:       resolvedExtraHeaders,
 		extraBody:          cfg.ExtraBody,
+		extraParams:        cfg.ExtraParams,
 		systemPromptPrefix: cfg.SystemPromptPrefix,
 		model: func(tp config.SelectedModelType) catwalk.Model {
 			return *config.Get().GetModelByType(tp)
@@ -172,7 +173,7 @@ func NewProvider(cfg config.ProviderConfig, opts ...ProviderClientOption) (Provi
 	case catwalk.TypeAnthropic:
 		return &baseProvider[AnthropicClient]{
 			options: clientOptions,
-			client:  newAnthropicClient(clientOptions, false),
+			client:  newAnthropicClient(clientOptions, AnthropicClientTypeNormal),
 		}, nil
 	case catwalk.TypeOpenAI:
 		return &baseProvider[OpenAIClient]{

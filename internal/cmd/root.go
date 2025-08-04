@@ -6,14 +6,12 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"strings"
 
 	tea "github.com/charmbracelet/bubbletea/v2"
 	"github.com/charmbracelet/crush/internal/app"
 	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/db"
 	"github.com/charmbracelet/crush/internal/tui"
-	"github.com/charmbracelet/crush/internal/update"
 	"github.com/charmbracelet/crush/internal/version"
 	"github.com/charmbracelet/fang"
 	"github.com/charmbracelet/x/term"
@@ -27,9 +25,7 @@ func init() {
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
 	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 
-	runCmd.Flags().BoolP("quiet", "q", false, "Hide spinner")
 	rootCmd.AddCommand(runCmd)
-	rootCmd.AddCommand(updateCmd)
 }
 
 var rootCmd = &cobra.Command{
@@ -83,77 +79,6 @@ crush -y
 	},
 }
 
-var runCmd = &cobra.Command{
-	Use:   "run [prompt...]",
-	Short: "Run a single non-interactive prompt",
-	Long: `Run a single prompt in non-interactive mode and exit.
-The prompt can be provided as arguments or piped from stdin.`,
-	Example: `
-# Run a simple prompt
-crush run Explain the use of context in Go
-
-# Pipe input from stdin
-echo "What is this code doing?" | crush run
-
-# Run with quiet mode (no spinner)
-crush run -q "Generate a README for this project"
-  `,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		quiet, _ := cmd.Flags().GetBool("quiet")
-
-		app, err := setupApp(cmd)
-		if err != nil {
-			return err
-		}
-		defer app.Shutdown()
-
-		prompt := strings.Join(args, " ")
-
-		prompt, err = maybePrependStdin(prompt)
-		if err != nil {
-			slog.Error("Failed to read from stdin", "error", err)
-			return err
-		}
-
-		if prompt == "" {
-			return fmt.Errorf("no prompt provided")
-		}
-
-		// Run non-interactive flow using the App method
-		return app.RunNonInteractive(cmd.Context(), prompt, quiet)
-	},
-}
-
-var updateCmd = &cobra.Command{
-	Use:   "check-update",
-	Short: "Check for updates",
-	Long:  `Check if a new version of crush is available.`,
-	Example: `
-# Check for updates
-crush check-update
-  `,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("Checking for updates...")
-
-		info, err := update.CheckForUpdate(cmd.Context())
-		if err != nil {
-			return fmt.Errorf("failed to check for updates: %w", err)
-		}
-
-		if !info.Available {
-			fmt.Printf("You are running the latest version (%s)\n", info.CurrentVersion)
-			return nil
-		}
-
-		fmt.Printf("\n🎉 A new version of crush is available!\n\n")
-		fmt.Printf("Current version: %s\n", info.CurrentVersion)
-		fmt.Printf("Latest version:  %s\n\n", info.LatestVersion)
-		fmt.Printf("Visit %s to download the latest version.\n", info.ReleaseURL)
-
-		return nil
-	},
-}
-
 func Execute() {
 	if err := fang.Execute(
 		context.Background(),
@@ -172,7 +97,7 @@ func setupApp(cmd *cobra.Command) (*app.App, error) {
 	yolo, _ := cmd.Flags().GetBool("yolo")
 	ctx := cmd.Context()
 
-	cwd, err := resolveCwd(cmd)
+	cwd, err := ResolveCwd(cmd)
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +127,7 @@ func setupApp(cmd *cobra.Command) (*app.App, error) {
 	return appInstance, nil
 }
 
-func maybePrependStdin(prompt string) (string, error) {
+func MaybePrependStdin(prompt string) (string, error) {
 	if term.IsTerminal(os.Stdin.Fd()) {
 		return prompt, nil
 	}
@@ -220,7 +145,7 @@ func maybePrependStdin(prompt string) (string, error) {
 	return string(bts) + "\n\n" + prompt, nil
 }
 
-func resolveCwd(cmd *cobra.Command) (string, error) {
+func ResolveCwd(cmd *cobra.Command) (string, error) {
 	cwd, _ := cmd.Flags().GetString("cwd")
 	if cwd != "" {
 		err := os.Chdir(cwd)

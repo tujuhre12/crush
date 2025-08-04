@@ -17,7 +17,7 @@
 - **Session-Based:** maintain multiple work sessions and contexts per project
 - **LSP-Enhanced:** Crush uses LSPs for additional context, just like you do
 - **Extensible:** add capabilities via MCPs (`http`, `stdio`, and `sse`)
-- **Works Everywhere:** first-class support in every terminal on macOS, Linux, Windows (PowerShell and WSL), and FreeBSD
+- **Works Everywhere:** first-class support in every terminal on macOS, Linux, Windows (PowerShell and WSL), FreeBSD, OpenBSD, and NetBSD
 
 ## Installation
 
@@ -32,10 +32,13 @@ npm install -g @charmland/crush
 
 # Arch Linux (btw)
 yay -S crush-bin
+
+# Nix
+nix run github:numtide/nix-ai-tools#crush
 ```
 
 <details>
-<summary><strong>Nix</strong></summary>
+<summary><strong>Nix (NUR)</strong></summary>
     
 Crush is available via [NUR](https://github.com/nix-community/NUR) in `nur.repos.charmbracelet.crush`.
 
@@ -105,13 +108,11 @@ Crush. You'll be prompted to enter your API key.
 
 That said, you can also set environment variables for preferred providers.
 
-<details>
-<summary><strong>Supported Environment Variables</strong></summary>
-
 | Environment Variable       | Provider                                           |
 | -------------------------- | -------------------------------------------------- |
 | `ANTHROPIC_API_KEY`        | Anthropic                                          |
 | `OPENAI_API_KEY`           | OpenAI                                             |
+| `OPENROUTER_API_KEY`       | OpenRouter                                         |
 | `GEMINI_API_KEY`           | Google Gemini                                      |
 | `VERTEXAI_PROJECT`         | Google Cloud VertexAI (Gemini)                     |
 | `VERTEXAI_LOCATION`        | Google Cloud VertexAI (Gemini)                     |
@@ -122,8 +123,6 @@ That said, you can also set environment variables for preferred providers.
 | `AZURE_OPENAI_ENDPOINT`    | Azure OpenAI models                                |
 | `AZURE_OPENAI_API_KEY`     | Azure OpenAI models (optional when using Entra ID) |
 | `AZURE_OPENAI_API_VERSION` | Azure OpenAI models                                |
-
-</details>
 
 ### By the Way
 
@@ -211,6 +210,16 @@ using `$(echo $VAR)` syntax.
   }
 }
 ```
+
+### Ignoring Files
+
+Crush respects `.gitignore` files by default, but you can also create a
+`.crushignore` file to specify additional files and directories that Crush
+should ignore. This is useful for excluding files that you want in version
+control but don't want Crush to consider when providing context.
+
+The `.crushignore` file uses the same syntax as `.gitignore` and can be placed
+in the root of your project or in subdirectories.
 
 ### Whitelisting Tools
 
