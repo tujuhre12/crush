@@ -140,6 +140,7 @@ type Options struct {
 	DebugLSP             bool        `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
 	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
 	DataDirectory        string      `json:"data_directory,omitempty" jsonschema:"description=Directory for storing application data (relative to working directory),default=.crush,example=.crush"` // Relative to the cwd
+	MaxMessagesInContext int         `json:"max_messages_in_context,omitempty" jsonschema:"description=Maximum number of messages to keep in context (sliding window),default=50,minimum=10,maximum=200"`
 }
 
 type MCPs map[string]MCPConfig

@@ -362,6 +362,13 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
+	
+	// Implement sliding window to limit message history
+	maxMessages := cfg.Options.MaxMessagesInContext
+	if maxMessages > 0 && len(msgs) > maxMessages {
+		// Keep the first message (usually system/context) and the last N-1 messages
+		msgs = append(msgs[:1], msgs[len(msgs)-maxMessages+1:]...)
+	}
 	if len(msgs) == 0 {
 		go func() {
 			defer log.RecoverPanic("agent.Run", func() {

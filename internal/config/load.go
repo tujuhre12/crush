@@ -282,6 +282,9 @@ func (c *Config) setDefaults(workingDir string) {
 	if c.Options.DataDirectory == "" {
 		c.Options.DataDirectory = filepath.Join(workingDir, defaultDataDirectory)
 	}
+	if c.Options.MaxMessagesInContext == 0 {
+		c.Options.MaxMessagesInContext = 50 // Default sliding window size
+	}
 	if c.Providers == nil {
 		c.Providers = csync.NewMap[string, ProviderConfig]()
 	}
