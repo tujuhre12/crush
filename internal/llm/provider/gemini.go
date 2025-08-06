@@ -10,9 +10,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
 	"github.com/charmbracelet/crush/internal/config"
-	"github.com/charmbracelet/crush/internal/fur/provider"
 	"github.com/charmbracelet/crush/internal/llm/tools"
+	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/google/uuid"
 	"google.golang.org/genai"
@@ -39,7 +40,14 @@ func newGeminiClient(opts providerClientOptions) GeminiClient {
 }
 
 func createGeminiClient(opts providerClientOptions) (*genai.Client, error) {
-	client, err := genai.NewClient(context.Background(), &genai.ClientConfig{APIKey: opts.apiKey, Backend: genai.BackendGeminiAPI})
+	cc := &genai.ClientConfig{
+		APIKey:  opts.apiKey,
+		Backend: genai.BackendGeminiAPI,
+	}
+	if config.Get().Options.Debug {
+		cc.HTTPClient = log.NewHTTPClient()
+	}
+	client, err := genai.NewClient(context.Background(), cc)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +81,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 
 			if len(msg.ToolCalls()) > 0 {
 				for _, call := range msg.ToolCalls() {
-					args, _ := parseJsonToMap(call.Input)
+					args, _ := parseJSONToMap(call.Input)
 					assistantParts = append(assistantParts, &genai.Part{
 						FunctionCall: &genai.FunctionCall{
 							Name: call.Name,
@@ -93,7 +101,7 @@ func (g *geminiClient) convertMessages(messages []message.Message) []*genai.Cont
 		case message.Tool:
 			for _, result := range msg.ToolResults() {
 				response := map[string]any{"result": result.Content}
-				parsed, err := parseJsonToMap(result.Content)
+				parsed, err := parseJSONToMap(result.Content)
 				if err == nil {
 					response = parsed
 				}
@@ -166,10 +174,6 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 	geminiMessages := g.convertMessages(messages)
 	model := g.providerOptions.model(g.providerOptions.modelType)
 	cfg := config.Get()
-	if cfg.Options.Debug {
-		jsonData, _ := json.Marshal(geminiMessages)
-		slog.Debug("Prepared messages", "messages", string(jsonData))
-	}
 
 	modelConfig := cfg.Models[config.SelectedModelTypeLarge]
 	if g.providerOptions.modelType == config.SelectedModelTypeSmall {
@@ -180,17 +184,19 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 	if modelConfig.MaxTokens > 0 {
 		maxTokens = modelConfig.MaxTokens
 	}
+	systemMessage := g.providerOptions.systemMessage
+	if g.providerOptions.systemPromptPrefix != "" {
+		systemMessage = g.providerOptions.systemPromptPrefix + "\n" + systemMessage
+	}
 	history := geminiMessages[:len(geminiMessages)-1] // All but last message
 	lastMsg := geminiMessages[len(geminiMessages)-1]
 	config := &genai.GenerateContentConfig{
 		MaxOutputTokens: int32(maxTokens),
 		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{{Text: g.providerOptions.systemMessage}},
+			Parts: []*genai.Part{{Text: systemMessage}},
 		},
 	}
-	if len(tools) > 0 {
-		config.Tools = g.convertTools(tools)
-	}
+	config.Tools = g.convertTools(tools)
 	chat, _ := g.client.Chats.Create(ctx, model.ID, config, history)
 
 	attempts := 0
@@ -210,7 +216,7 @@ func (g *geminiClient) send(ctx context.Context, messages []message.Message, too
 				return nil, retryErr
 			}
 			if retry {
-				slog.Warn(fmt.Sprintf("Retrying due to rate limit... attempt %d of %d", attempts, maxRetries))
+				slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
 				select {
 				case <-ctx.Done():
 					return nil, ctx.Err()
@@ -264,10 +270,6 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 
 	model := g.providerOptions.model(g.providerOptions.modelType)
 	cfg := config.Get()
-	if cfg.Options.Debug {
-		jsonData, _ := json.Marshal(geminiMessages)
-		slog.Debug("Prepared messages", "messages", string(jsonData))
-	}
 
 	modelConfig := cfg.Models[config.SelectedModelTypeLarge]
 	if g.providerOptions.modelType == config.SelectedModelTypeSmall {
@@ -282,17 +284,19 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 	if g.providerOptions.maxTokens > 0 {
 		maxTokens = g.providerOptions.maxTokens
 	}
+	systemMessage := g.providerOptions.systemMessage
+	if g.providerOptions.systemPromptPrefix != "" {
+		systemMessage = g.providerOptions.systemPromptPrefix + "\n" + systemMessage
+	}
 	history := geminiMessages[:len(geminiMessages)-1] // All but last message
 	lastMsg := geminiMessages[len(geminiMessages)-1]
 	config := &genai.GenerateContentConfig{
 		MaxOutputTokens: int32(maxTokens),
 		SystemInstruction: &genai.Content{
-			Parts: []*genai.Part{{Text: g.providerOptions.systemMessage}},
+			Parts: []*genai.Part{{Text: systemMessage}},
 		},
 	}
-	if len(tools) > 0 {
-		config.Tools = g.convertTools(tools)
-	}
+	config.Tools = g.convertTools(tools)
 	chat, _ := g.client.Chats.Create(ctx, model.ID, config, history)
 
 	attempts := 0
@@ -323,7 +327,7 @@ func (g *geminiClient) stream(ctx context.Context, messages []message.Message, t
 						return
 					}
 					if retry {
-						slog.Warn(fmt.Sprintf("Retrying due to rate limit... attempt %d of %d", attempts, maxRetries))
+						slog.Warn("Retrying due to rate limit", "attempt", attempts, "max_retries", maxRetries)
 						select {
 						case <-ctx.Done():
 							if ctx.Err() != nil {
@@ -463,12 +467,12 @@ func (g *geminiClient) usage(resp *genai.GenerateContentResponse) TokenUsage {
 	}
 }
 
-func (g *geminiClient) Model() provider.Model {
+func (g *geminiClient) Model() catwalk.Model {
 	return g.providerOptions.model(g.providerOptions.modelType)
 }
 
 // Helper functions
-func parseJsonToMap(jsonStr string) (map[string]any, error) {
+func parseJSONToMap(jsonStr string) (map[string]any, error) {
 	var result map[string]any
 	err := json.Unmarshal([]byte(jsonStr), &result)
 	return result, err

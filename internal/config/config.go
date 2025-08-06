@@ -1,12 +1,19 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"slices"
 	"strings"
+	"time"
 
-	"github.com/charmbracelet/crush/internal/fur/provider"
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"github.com/charmbracelet/crush/internal/csync"
+	"github.com/charmbracelet/crush/internal/env"
 	"github.com/tidwall/sjson"
 )
 
@@ -30,6 +37,9 @@ var defaultContextPaths = []string{
 	"Crush.local.md",
 	"CRUSH.md",
 	"CRUSH.local.md",
+	"AGENTS.md",
+	"agents.md",
+	"Agents.md",
 }
 
 type SelectedModelType string
@@ -42,43 +52,48 @@ const (
 type SelectedModel struct {
 	// The model id as used by the provider API.
 	// Required.
-	Model string `json:"model"`
+	Model string `json:"model" jsonschema:"required,description=The model ID as used by the provider API,example=gpt-4o"`
 	// The model provider, same as the key/id used in the providers config.
 	// Required.
-	Provider string `json:"provider"`
+	Provider string `json:"provider" jsonschema:"required,description=The model provider ID that matches a key in the providers config,example=openai"`
 
 	// Only used by models that use the openai provider and need this set.
-	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	ReasoningEffort string `json:"reasoning_effort,omitempty" jsonschema:"description=Reasoning effort level for OpenAI models that support it,enum=low,enum=medium,enum=high"`
 
 	// Overrides the default model configuration.
-	MaxTokens int64 `json:"max_tokens,omitempty"`
+	MaxTokens int64 `json:"max_tokens,omitempty" jsonschema:"description=Maximum number of tokens for model responses,minimum=1,maximum=200000,example=4096"`
 
 	// Used by anthropic models that can reason to indicate if the model should think.
-	Think bool `json:"think,omitempty"`
+	Think bool `json:"think,omitempty" jsonschema:"description=Enable thinking mode for Anthropic models that support reasoning"`
 }
 
 type ProviderConfig struct {
 	// The provider's id.
-	ID string `json:"id,omitempty"`
+	ID string `json:"id,omitempty" jsonschema:"description=Unique identifier for the provider,example=openai"`
 	// The provider's name, used for display purposes.
-	Name string `json:"name,omitempty"`
+	Name string `json:"name,omitempty" jsonschema:"description=Human-readable name for the provider,example=OpenAI"`
 	// The provider's API endpoint.
-	BaseURL string `json:"base_url,omitempty"`
+	BaseURL string `json:"base_url,omitempty" jsonschema:"description=Base URL for the provider's API,format=uri,example=https://api.openai.com/v1"`
 	// The provider type, e.g. "openai", "anthropic", etc. if empty it defaults to openai.
-	Type provider.Type `json:"type,omitempty"`
+	Type catwalk.Type `json:"type,omitempty" jsonschema:"description=Provider type that determines the API format,enum=openai,enum=anthropic,enum=gemini,enum=azure,enum=vertexai,default=openai"`
 	// The provider's API key.
-	APIKey string `json:"api_key,omitempty"`
+	APIKey string `json:"api_key,omitempty" jsonschema:"description=API key for authentication with the provider,example=$OPENAI_API_KEY"`
 	// Marks the provider as disabled.
-	Disable bool `json:"disable,omitempty"`
+	Disable bool `json:"disable,omitempty" jsonschema:"description=Whether this provider is disabled,default=false"`
+
+	// Custom system prompt prefix.
+	SystemPromptPrefix string `json:"system_prompt_prefix,omitempty" jsonschema:"description=Custom prefix to add to system prompts for this provider"`
 
 	// Extra headers to send with each request to the provider.
-	ExtraHeaders map[string]string `json:"extra_headers,omitempty"`
+	ExtraHeaders map[string]string `json:"extra_headers,omitempty" jsonschema:"description=Additional HTTP headers to send with requests"`
+	// Extra body
+	ExtraBody map[string]any `json:"extra_body,omitempty" jsonschema:"description=Additional fields to include in request bodies"`
 
 	// Used to pass extra parameters to the provider.
 	ExtraParams map[string]string `json:"-"`
 
 	// The provider models
-	Models []provider.Model `json:"models,omitempty"`
+	Models []catwalk.Model `json:"models,omitempty" jsonschema:"description=List of models available from this provider"`
 }
 
 type MCPType string
@@ -90,37 +105,41 @@ const (
 )
 
 type MCPConfig struct {
-	Command  string   `json:"command,omitempty" `
-	Env      []string `json:"env,omitempty"`
-	Args     []string `json:"args,omitempty"`
-	Type     MCPType  `json:"type"`
-	URL      string   `json:"url,omitempty"`
-	Disabled bool     `json:"disabled,omitempty"`
+	Command  string            `json:"command,omitempty" jsonschema:"description=Command to execute for stdio MCP servers,example=npx"`
+	Env      map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set for the MCP server"`
+	Args     []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the MCP server command"`
+	Type     MCPType           `json:"type" jsonschema:"required,description=Type of MCP connection,enum=stdio,enum=sse,enum=http,default=stdio"`
+	URL      string            `json:"url,omitempty" jsonschema:"description=URL for HTTP or SSE MCP servers,format=uri,example=http://localhost:3000/mcp"`
+	Disabled bool              `json:"disabled,omitempty" jsonschema:"description=Whether this MCP server is disabled,default=false"`
 
 	// TODO: maybe make it possible to get the value from the env
-	Headers map[string]string `json:"headers,omitempty"`
+	Headers map[string]string `json:"headers,omitempty" jsonschema:"description=HTTP headers for HTTP/SSE MCP servers"`
 }
 
 type LSPConfig struct {
-	Disabled bool     `json:"enabled,omitempty"`
-	Command  string   `json:"command"`
-	Args     []string `json:"args,omitempty"`
-	Options  any      `json:"options,omitempty"`
+	Disabled bool     `json:"enabled,omitempty" jsonschema:"description=Whether this LSP server is disabled,default=false"`
+	Command  string   `json:"command" jsonschema:"required,description=Command to execute for the LSP server,example=gopls"`
+	Args     []string `json:"args,omitempty" jsonschema:"description=Arguments to pass to the LSP server command"`
+	Options  any      `json:"options,omitempty" jsonschema:"description=LSP server-specific configuration options"`
 }
 
 type TUIOptions struct {
-	CompactMode bool `json:"compact_mode,omitempty"`
+	CompactMode bool `json:"compact_mode,omitempty" jsonschema:"description=Enable compact mode for the TUI interface,default=false"`
 	// Here we can add themes later or any TUI related options
 }
 
+type Permissions struct {
+	AllowedTools []string `json:"allowed_tools,omitempty" jsonschema:"description=List of tools that don't require permission prompts,example=bash,example=view"` // Tools that don't require permission prompts
+	SkipRequests bool     `json:"-"`                                                                                                                              // Automatically accept all permissions (YOLO mode)
+}
+
 type Options struct {
-	ContextPaths         []string    `json:"context_paths,omitempty"`
-	TUI                  *TUIOptions `json:"tui,omitempty"`
-	Debug                bool        `json:"debug,omitempty"`
-	DebugLSP             bool        `json:"debug_lsp,omitempty"`
-	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty"`
-	// Relative to the cwd
-	DataDirectory string `json:"data_directory,omitempty"`
+	ContextPaths         []string    `json:"context_paths,omitempty" jsonschema:"description=Paths to files containing context information for the AI,example=.cursorrules,example=CRUSH.md"`
+	TUI                  *TUIOptions `json:"tui,omitempty" jsonschema:"description=Terminal user interface options"`
+	Debug                bool        `json:"debug,omitempty" jsonschema:"description=Enable debug logging,default=false"`
+	DebugLSP             bool        `json:"debug_lsp,omitempty" jsonschema:"description=Enable debug logging for LSP servers,default=false"`
+	DisableAutoSummarize bool        `json:"disable_auto_summarize,omitempty" jsonschema:"description=Disable automatic conversation summarization,default=false"`
+	DataDirectory        string      `json:"data_directory,omitempty" jsonschema:"description=Directory for storing application data (relative to working directory),default=.crush,example=.crush"` // Relative to the cwd
 }
 
 type MCPs map[string]MCPConfig
@@ -165,6 +184,37 @@ func (l LSPs) Sorted() []LSP {
 	return sorted
 }
 
+func (m MCPConfig) ResolvedEnv() []string {
+	resolver := NewShellVariableResolver(env.New())
+	for e, v := range m.Env {
+		var err error
+		m.Env[e], err = resolver.ResolveValue(v)
+		if err != nil {
+			slog.Error("error resolving environment variable", "error", err, "variable", e, "value", v)
+			continue
+		}
+	}
+
+	env := make([]string, 0, len(m.Env))
+	for k, v := range m.Env {
+		env = append(env, fmt.Sprintf("%s=%s", k, v))
+	}
+	return env
+}
+
+func (m MCPConfig) ResolvedHeaders() map[string]string {
+	resolver := NewShellVariableResolver(env.New())
+	for e, v := range m.Headers {
+		var err error
+		m.Headers[e], err = resolver.ResolveValue(v)
+		if err != nil {
+			slog.Error("error resolving header variable", "error", err, "variable", e, "value", v)
+			continue
+		}
+	}
+	return m.Headers
+}
+
 type Agent struct {
 	ID          string `json:"id,omitempty"`
 	Name        string `json:"name,omitempty"`
@@ -172,7 +222,7 @@ type Agent struct {
 	// This is the id of the system prompt used by the agent
 	Disabled bool `json:"disabled,omitempty"`
 
-	Model SelectedModelType `json:"model"`
+	Model SelectedModelType `json:"model" jsonschema:"required,description=The model type to use for this agent,enum=large,enum=small,default=large"`
 
 	// The available tools for the agent
 	//  if this is nil, all tools are available
@@ -195,16 +245,18 @@ type Agent struct {
 // Config holds the configuration for crush.
 type Config struct {
 	// We currently only support large/small as values here.
-	Models map[SelectedModelType]SelectedModel `json:"models,omitempty"`
+	Models map[SelectedModelType]SelectedModel `json:"models,omitempty" jsonschema:"description=Model configurations for different model types,example={\"large\":{\"model\":\"gpt-4o\",\"provider\":\"openai\"}}"`
 
 	// The providers that are configured
-	Providers map[string]ProviderConfig `json:"providers,omitempty"`
+	Providers *csync.Map[string, ProviderConfig] `json:"providers,omitempty" jsonschema:"description=AI provider configurations"`
 
-	MCP MCPs `json:"mcp,omitempty"`
+	MCP MCPs `json:"mcp,omitempty" jsonschema:"description=Model Context Protocol server configurations"`
 
-	LSP LSPs `json:"lsp,omitempty"`
+	LSP LSPs `json:"lsp,omitempty" jsonschema:"description=Language Server Protocol configurations"`
 
-	Options *Options `json:"options,omitempty"`
+	Options *Options `json:"options,omitempty" jsonschema:"description=General application options"`
+
+	Permissions *Permissions `json:"permissions,omitempty" jsonschema:"description=Permission settings for tool usage"`
 
 	// Internal
 	workingDir string `json:"-"`
@@ -212,8 +264,8 @@ type Config struct {
 	Agents map[string]Agent `json:"-"`
 	// TODO: find a better way to do this this should probably not be part of the config
 	resolver       VariableResolver
-	dataConfigDir  string              `json:"-"`
-	knownProviders []provider.Provider `json:"-"`
+	dataConfigDir  string             `json:"-"`
+	knownProviders []catwalk.Provider `json:"-"`
 }
 
 func (c *Config) WorkingDir() string {
@@ -221,8 +273,8 @@ func (c *Config) WorkingDir() string {
 }
 
 func (c *Config) EnabledProviders() []ProviderConfig {
-	enabled := make([]ProviderConfig, 0, len(c.Providers))
-	for _, p := range c.Providers {
+	var enabled []ProviderConfig
+	for p := range c.Providers.Seq() {
 		if !p.Disable {
 			enabled = append(enabled, p)
 		}
@@ -235,8 +287,8 @@ func (c *Config) IsConfigured() bool {
 	return len(c.EnabledProviders()) > 0
 }
 
-func (c *Config) GetModel(provider, model string) *provider.Model {
-	if providerConfig, ok := c.Providers[provider]; ok {
+func (c *Config) GetModel(provider, model string) *catwalk.Model {
+	if providerConfig, ok := c.Providers.Get(provider); ok {
 		for _, m := range providerConfig.Models {
 			if m.ID == model {
 				return &m
@@ -251,13 +303,13 @@ func (c *Config) GetProviderForModel(modelType SelectedModelType) *ProviderConfi
 	if !ok {
 		return nil
 	}
-	if providerConfig, ok := c.Providers[model.Provider]; ok {
+	if providerConfig, ok := c.Providers.Get(model.Provider); ok {
 		return &providerConfig
 	}
 	return nil
 }
 
-func (c *Config) GetModelByType(modelType SelectedModelType) *provider.Model {
+func (c *Config) GetModelByType(modelType SelectedModelType) *catwalk.Model {
 	model, ok := c.Models[modelType]
 	if !ok {
 		return nil
@@ -265,7 +317,7 @@ func (c *Config) GetModelByType(modelType SelectedModelType) *provider.Model {
 	return c.GetModel(model.Provider, model.Model)
 }
 
-func (c *Config) LargeModel() *provider.Model {
+func (c *Config) LargeModel() *catwalk.Model {
 	model, ok := c.Models[SelectedModelTypeLarge]
 	if !ok {
 		return nil
@@ -273,7 +325,7 @@ func (c *Config) LargeModel() *provider.Model {
 	return c.GetModel(model.Provider, model.Model)
 }
 
-func (c *Config) SmallModel() *provider.Model {
+func (c *Config) SmallModel() *catwalk.Model {
 	model, ok := c.Models[SelectedModelTypeSmall]
 	if !ok {
 		return nil
@@ -319,7 +371,7 @@ func (c *Config) SetConfigField(key string, value any) error {
 	if err != nil {
 		return fmt.Errorf("failed to set config field %s: %w", key, err)
 	}
-	if err := os.WriteFile(c.dataConfigDir, []byte(newValue), 0o644); err != nil {
+	if err := os.WriteFile(c.dataConfigDir, []byte(newValue), 0o600); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 	return nil
@@ -332,18 +384,14 @@ func (c *Config) SetProviderAPIKey(providerID, apiKey string) error {
 		return fmt.Errorf("failed to save API key to config file: %w", err)
 	}
 
-	if c.Providers == nil {
-		c.Providers = make(map[string]ProviderConfig)
-	}
-
-	providerConfig, exists := c.Providers[providerID]
+	providerConfig, exists := c.Providers.Get(providerID)
 	if exists {
 		providerConfig.APIKey = apiKey
-		c.Providers[providerID] = providerConfig
+		c.Providers.Set(providerID, providerConfig)
 		return nil
 	}
 
-	var foundProvider *provider.Provider
+	var foundProvider *catwalk.Provider
 	for _, p := range c.knownProviders {
 		if string(p.ID) == providerID {
 			foundProvider = &p
@@ -368,7 +416,7 @@ func (c *Config) SetProviderAPIKey(providerID, apiKey string) error {
 		return fmt.Errorf("provider with ID %s not found in known providers", providerID)
 	}
 	// Store the updated provider config
-	c.Providers[providerID] = providerConfig
+	c.Providers.Set(providerID, providerConfig)
 	return nil
 }
 
@@ -401,4 +449,59 @@ func (c *Config) SetupAgents() {
 		},
 	}
 	c.Agents = agents
+}
+
+func (c *Config) Resolver() VariableResolver {
+	return c.resolver
+}
+
+func (c *ProviderConfig) TestConnection(resolver VariableResolver) error {
+	testURL := ""
+	headers := make(map[string]string)
+	apiKey, _ := resolver.ResolveValue(c.APIKey)
+	switch c.Type {
+	case catwalk.TypeOpenAI:
+		baseURL, _ := resolver.ResolveValue(c.BaseURL)
+		if baseURL == "" {
+			baseURL = "https://api.openai.com/v1"
+		}
+		testURL = baseURL + "/models"
+		headers["Authorization"] = "Bearer " + apiKey
+	case catwalk.TypeAnthropic:
+		baseURL, _ := resolver.ResolveValue(c.BaseURL)
+		if baseURL == "" {
+			baseURL = "https://api.anthropic.com/v1"
+		}
+		testURL = baseURL + "/models"
+		headers["x-api-key"] = apiKey
+		headers["anthropic-version"] = "2023-06-01"
+	case catwalk.TypeGemini:
+		baseURL, _ := resolver.ResolveValue(c.BaseURL)
+		if baseURL == "" {
+			baseURL = "https://generativelanguage.googleapis.com"
+		}
+		testURL = baseURL + "/v1beta/models?key=" + url.QueryEscape(apiKey)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	client := &http.Client{}
+	req, err := http.NewRequestWithContext(ctx, "GET", testURL, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request for provider %s: %w", c.ID, err)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	for k, v := range c.ExtraHeaders {
+		req.Header.Set(k, v)
+	}
+	b, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to create request for provider %s: %w", c.ID, err)
+	}
+	if b.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to connect to provider %s: %s", c.ID, b.Status)
+	}
+	_ = b.Body.Close()
+	return nil
 }

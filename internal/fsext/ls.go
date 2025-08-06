@@ -3,7 +3,6 @@ package fsext
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/charlievieth/fastwalk"
 	ignore "github.com/sabhiram/go-gitignore"
@@ -69,6 +68,7 @@ var CommonIgnorePatterns = []string{
 
 type DirectoryLister struct {
 	gitignore    *ignore.GitIgnore
+	crushignore  *ignore.GitIgnore
 	commonIgnore *ignore.GitIgnore
 	rootPath     string
 }
@@ -83,6 +83,14 @@ func NewDirectoryLister(rootPath string) *DirectoryLister {
 	if _, err := os.Stat(gitignorePath); err == nil {
 		if gi, err := ignore.CompileIgnoreFile(gitignorePath); err == nil {
 			dl.gitignore = gi
+		}
+	}
+
+	// Load crushignore if it exists
+	crushignorePath := filepath.Join(rootPath, ".crushignore")
+	if _, err := os.Stat(crushignorePath); err == nil {
+		if ci, err := ignore.CompileIgnoreFile(crushignorePath); err == nil {
+			dl.crushignore = ci
 		}
 	}
 
@@ -108,11 +116,12 @@ func (dl *DirectoryLister) shouldIgnore(path string, ignorePatterns []string) bo
 		return true
 	}
 
-	base := filepath.Base(path)
-
-	if base != "." && strings.HasPrefix(base, ".") {
+	// Check crushignore patterns if available
+	if dl.crushignore != nil && dl.crushignore.MatchesPath(relPath) {
 		return true
 	}
+
+	base := filepath.Base(path)
 
 	for _, pattern := range ignorePatterns {
 		matched, err := filepath.Match(pattern, base)
@@ -161,7 +170,7 @@ func ListDirectory(initialPath string, ignorePatterns []string, limit int) ([]st
 
 		return nil
 	})
-	if err != nil {
+	if err != nil && len(results) == 0 {
 		return nil, truncated, err
 	}
 

@@ -12,6 +12,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/csync"
 
 	"github.com/charmbracelet/crush/internal/lsp"
 	"github.com/charmbracelet/crush/internal/lsp/protocol"
@@ -25,12 +26,18 @@ type WorkspaceWatcher struct {
 	workspacePath string
 
 	debounceTime time.Duration
-	debounceMap  map[string]*time.Timer
-	debounceMu   sync.Mutex
+	debounceMap  *csync.Map[string, *time.Timer]
 
 	// File watchers registered by the server
 	registrations  []protocol.FileSystemWatcher
 	registrationMu sync.RWMutex
+}
+
+func init() {
+	// Ensure the watcher is initialized with a reasonable file limit
+	if _, err := Ulimit(); err != nil {
+		slog.Error("Error setting file limit", "error", err)
+	}
 }
 
 // NewWorkspaceWatcher creates a new workspace watcher
@@ -39,7 +46,7 @@ func NewWorkspaceWatcher(name string, client *lsp.Client) *WorkspaceWatcher {
 		name:          name,
 		client:        client,
 		debounceTime:  300 * time.Millisecond,
-		debounceMap:   make(map[string]*time.Timer),
+		debounceMap:   csync.NewMap[string, *time.Timer](),
 		registrations: []protocol.FileSystemWatcher{},
 	}
 }
@@ -77,13 +84,13 @@ func (w *WorkspaceWatcher) AddRegistrations(ctx context.Context, id string, watc
 				switch u := v.BaseURI.Value.(type) {
 				case string:
 					slog.Debug("BaseURI", "baseURI", u)
-				case protocol.DocumentUri:
+				case protocol.DocumentURI:
 					slog.Debug("BaseURI", "baseURI", u)
 				default:
 					slog.Debug("BaseURI", "baseURI", u)
 				}
 			default:
-				slog.Debug("GlobPattern", "unknown type", fmt.Sprintf("%T", v))
+				slog.Debug("GlobPattern unknown type", "type", fmt.Sprintf("%T", v))
 			}
 
 			// Log WatchKind
@@ -514,8 +521,8 @@ func matchesGlob(pattern, path string) bool {
 // matchesSimpleGlob handles glob patterns with ** wildcards
 func matchesSimpleGlob(pattern, path string) bool {
 	// Handle special case for **/*.ext pattern (common in LSP)
-	if strings.HasPrefix(pattern, "**/") {
-		rest := strings.TrimPrefix(pattern, "**/")
+	if after, ok := strings.CutPrefix(pattern, "**/"); ok {
+		rest := after
 
 		// If the rest is a simple file extension pattern like *.go
 		if strings.HasPrefix(rest, "*.") {
@@ -606,8 +613,15 @@ func (w *WorkspaceWatcher) matchesPattern(path string, pattern protocol.GlobPatt
 		return fullPathMatch || baseNameMatch
 	}
 
+	if basePath == "" {
+		return false
+	}
 	// For relative patterns
-	basePath = protocol.DocumentUri(basePath).Path()
+	if basePath, err = protocol.DocumentURI(basePath).Path(); err != nil {
+		// XXX: Do we want to return here, or send the error up the stack?
+		slog.Error("Error converting base path to URI", "basePath", basePath, "error", err)
+	}
+
 	basePath = filepath.ToSlash(basePath)
 
 	// Make path relative to basePath for matching
@@ -625,34 +639,35 @@ func (w *WorkspaceWatcher) matchesPattern(path string, pattern protocol.GlobPatt
 
 // debounceHandleFileEvent handles file events with debouncing to reduce notifications
 func (w *WorkspaceWatcher) debounceHandleFileEvent(ctx context.Context, uri string, changeType protocol.FileChangeType) {
-	w.debounceMu.Lock()
-	defer w.debounceMu.Unlock()
-
 	// Create a unique key based on URI and change type
 	key := fmt.Sprintf("%s:%d", uri, changeType)
 
 	// Cancel existing timer if any
-	if timer, exists := w.debounceMap[key]; exists {
+	if timer, exists := w.debounceMap.Get(key); exists {
 		timer.Stop()
 	}
 
 	// Create new timer
-	w.debounceMap[key] = time.AfterFunc(w.debounceTime, func() {
+	w.debounceMap.Set(key, time.AfterFunc(w.debounceTime, func() {
 		w.handleFileEvent(ctx, uri, changeType)
 
 		// Cleanup timer after execution
-		w.debounceMu.Lock()
-		delete(w.debounceMap, key)
-		w.debounceMu.Unlock()
-	})
+		w.debounceMap.Del(key)
+	}))
 }
 
 // handleFileEvent sends file change notifications
 func (w *WorkspaceWatcher) handleFileEvent(ctx context.Context, uri string, changeType protocol.FileChangeType) {
 	// If the file is open and it's a change event, use didChange notification
-	filePath := protocol.DocumentUri(uri).Path()
+	filePath, err := protocol.DocumentURI(uri).Path()
+	if err != nil {
+		// XXX: Do we want to return here, or send the error up the stack?
+		slog.Error("Error converting URI to path", "uri", uri, "error", err)
+		return
+	}
+
 	if changeType == protocol.FileChangeType(protocol.Deleted) {
-		w.client.ClearDiagnosticsForURI(protocol.DocumentUri(uri))
+		w.client.ClearDiagnosticsForURI(protocol.DocumentURI(uri))
 	} else if changeType == protocol.FileChangeType(protocol.Changed) && w.client.IsFileOpen(filePath) {
 		err := w.client.NotifyChange(ctx, filePath)
 		if err != nil {
@@ -680,7 +695,7 @@ func (w *WorkspaceWatcher) notifyFileEvent(ctx context.Context, uri string, chan
 	params := protocol.DidChangeWatchedFilesParams{
 		Changes: []protocol.FileEvent{
 			{
-				URI:  protocol.DocumentUri(uri),
+				URI:  protocol.DocumentURI(uri),
 				Type: changeType,
 			},
 		},

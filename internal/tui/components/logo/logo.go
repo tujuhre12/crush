@@ -44,13 +44,19 @@ func Render(version string, compact bool, o Opts) string {
 
 	// Title.
 	const spacing = 1
-	crush := renderWord(spacing, !compact,
+	letterforms := []letterform{
 		letterC,
 		letterR,
 		letterU,
 		letterSStylized,
 		letterH,
-	)
+	}
+	stretchIndex := -1 // -1 means no stretching.
+	if !compact {
+		stretchIndex = rand.IntN(len(letterforms))
+	}
+
+	crush := renderWord(spacing, stretchIndex, letterforms...)
 	crushWidth := lipgloss.Width(crush)
 	b := new(strings.Builder)
 	for r := range strings.SplitSeq(crush, "\n") {
@@ -110,8 +116,23 @@ func Render(version string, compact bool, o Opts) string {
 	return logo
 }
 
-// renderWord renders letterforms to fork a word.
-func renderWord(spacing int, stretchRandomLetter bool, letterforms ...letterform) string {
+// SmallRender renders a smaller version of the Crush logo, suitable for
+// smaller windows or sidebar usage.
+func SmallRender(width int) string {
+	t := styles.CurrentTheme()
+	title := t.S().Base.Foreground(t.Secondary).Render("Charm™")
+	title = fmt.Sprintf("%s %s", title, styles.ApplyBoldForegroundGrad("Crush", t.Secondary, t.Primary))
+	remainingWidth := width - lipgloss.Width(title) - 1 // 1 for the space after "Crush"
+	if remainingWidth > 0 {
+		lines := strings.Repeat("╱", remainingWidth)
+		title = fmt.Sprintf("%s %s", title, t.S().Base.Foreground(t.Primary).Render(lines))
+	}
+	return title
+}
+
+// renderWord renders letterforms to fork a word. stretchIndex is the index of
+// the letter to stretch, or -1 if no letter should be stretched.
+func renderWord(spacing int, stretchIndex int, letterforms ...letterform) string {
 	if spacing < 0 {
 		spacing = 0
 	}
@@ -119,11 +140,6 @@ func renderWord(spacing int, stretchRandomLetter bool, letterforms ...letterform
 	renderedLetterforms := make([]string, len(letterforms))
 
 	// pick one letter randomly to stretch
-	stretchIndex := -1
-	if stretchRandomLetter {
-		stretchIndex = rand.IntN(len(letterforms)) //nolint:gosec
-	}
-
 	for i, letter := range letterforms {
 		renderedLetterforms[i] = letter(i == stretchIndex)
 	}
@@ -220,42 +236,6 @@ func letterR(stretch bool) string {
 		▄
 		▄
 		▀
-	`)
-	return joinLetterform(
-		left,
-		stretchLetterformPart(center, letterformProps{
-			stretch:    stretch,
-			width:      3,
-			minStretch: 7,
-			maxStretch: 12,
-		}),
-		right,
-	)
-}
-
-// letterS renders the letter S in a stylized way. It takes an integer that
-// determines how many cells to stretch the letter. If the stretch is less than
-// 1, it defaults to no stretching.
-func letterS(stretch bool) string {
-	// Here's what we're making:
-	//
-	// ▄▀▀▀▀
-	//	▀▀▀▄
-	// ▀▀▀▀
-
-	left := heredoc.Doc(`
-		▄
-
-		▀
-	`)
-	center := heredoc.Doc(`
-		▀
-		▀
-		▀
-	`)
-	right := heredoc.Doc(`
-		▀
-		▄
 	`)
 	return joinLetterform(
 		left,

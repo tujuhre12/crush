@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
-	"runtime"
 	"strings"
 	"time"
 
@@ -24,8 +22,10 @@ type BashPermissionsParams struct {
 }
 
 type BashResponseMetadata struct {
-	StartTime int64 `json:"start_time"`
-	EndTime   int64 `json:"end_time"`
+	StartTime        int64  `json:"start_time"`
+	EndTime          int64  `json:"end_time"`
+	Output           string `json:"output"`
+	WorkingDirectory string `json:"working_directory"`
 }
 type bashTool struct {
 	permissions permission.Service
@@ -56,6 +56,8 @@ var bannedCommands = []string{
 	"lynx",
 	"nc",
 	"safari",
+	"scp",
+	"ssh",
 	"telnet",
 	"w3m",
 	"wget",
@@ -112,58 +114,17 @@ var bannedCommands = []string{
 	"ufw",
 }
 
-// getSafeReadOnlyCommands returns platform-appropriate safe commands
-func getSafeReadOnlyCommands() []string {
-	// Base commands that work on all platforms
-	baseCommands := []string{
-		// Cross-platform commands
-		"echo", "hostname", "whoami",
-
-		// Git commands (cross-platform)
-		"git status", "git log", "git diff", "git show", "git branch", "git tag", "git remote", "git ls-files", "git ls-remote",
-		"git rev-parse", "git config --get", "git config --list", "git describe", "git blame", "git grep", "git shortlog",
-
-		// Go commands (cross-platform)
-		"go version", "go help", "go list", "go env", "go doc", "go vet", "go fmt", "go mod", "go test", "go build", "go run", "go install", "go clean",
-	}
-
-	if runtime.GOOS == "windows" {
-		// Windows-specific commands
-		windowsCommands := []string{
-			"dir", "type", "where", "ver", "systeminfo", "tasklist", "ipconfig", "ping", "nslookup",
-			"Get-Process", "Get-Location", "Get-ChildItem", "Get-Content", "Get-Date", "Get-Host", "Get-ComputerInfo",
-		}
-		return append(baseCommands, windowsCommands...)
-	} else {
-		// Unix/Linux commands (including WSL, since WSL reports as Linux)
-		unixCommands := []string{
-			"ls", "pwd", "date", "cal", "uptime", "id", "groups", "env", "printenv", "set", "unset", "which", "type", "whereis",
-			"whatis", "uname", "df", "du", "free", "top", "ps", "kill", "killall", "nice", "nohup", "time", "timeout",
-		}
-		return append(baseCommands, unixCommands...)
-	}
-}
-
 func bashDescription() string {
 	bannedCommandsStr := strings.Join(bannedCommands, ", ")
 	return fmt.Sprintf(`Executes a given bash command in a persistent shell session with optional timeout, ensuring proper handling and security measures.
 
 CROSS-PLATFORM SHELL SUPPORT:
-- Unix/Linux/macOS: Uses native bash/sh shell
-- Windows: Intelligent shell selection:
-  * Windows commands (dir, type, copy, etc.) use cmd.exe
-  * PowerShell commands (Get-, Set-, etc.) use PowerShell
-  * Unix-style commands (ls, cat, etc.) use POSIX emulation
-- WSL: Automatically treated as Linux (which is correct)
-- Automatic detection: Chooses the best shell based on command and platform
-- Persistent state: Working directory and environment variables persist between commands
-
-WINDOWS-SPECIFIC FEATURES:
-- Native Windows commands: dir, type, copy, move, del, md, rd, cls, where, tasklist, etc.
-- PowerShell support: Get-Process, Set-Location, and other PowerShell cmdlets
-- Windows path handling: Supports both forward slashes (/) and backslashes (\)
-- Drive letters: Properly handles C:\, D:\, etc.
-- Environment variables: Supports both Unix ($VAR) and Windows (%%VAR%%) syntax
+* This tool uses a shell interpreter (mvdan/sh) that mimics the Bash language,
+  so you should use Bash syntax in all platforms, including Windows.
+  The most common shell builtins and core utils are available in Windows as
+  well.
+* Make sure to use forward slashes (/) as path separators in commands, even on
+  Windows. Example: "ls C:/foo/bar" instead of "ls C:\foo\bar".
 
 Before executing the command, please follow these steps:
 
@@ -186,6 +147,7 @@ Before executing the command, please follow these steps:
 5. Return Result:
  - Provide the processed output of the command.
  - If any errors occurred during execution, include those in the output.
+ - The result will also have metadata like the cwd (current working directory) at the end, included with <cwd></cwd> tags.
 
 Usage notes:
 - The command argument is required.
@@ -230,7 +192,7 @@ When the user asks you to create a new git commit, follow these steps carefully:
 
 4. Create the commit with a message ending with:
 💘 Generated with Crush
-Co-Authored-By: Crush <noreply@crush.charm.land>
+Co-Authored-By: Crush <crush@charm.land>
 
 - In order to ensure good formatting, ALWAYS pass the commit message via a HEREDOC, a la this example:
 <example>
@@ -238,7 +200,7 @@ git commit -m "$(cat <<'EOF'
  Commit message here.
 
  💘 Generated with Crush
- Co-Authored-By: 💘 Crush <noreply@crush.charm.land>
+ Co-Authored-By: 💘 Crush <crush@charm.land>
  EOF
  )"
 </example>
@@ -393,10 +355,8 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	isSafeReadOnly := false
 	cmdLower := strings.ToLower(params.Command)
 
-	// Get platform-appropriate safe commands
-	safeReadOnlyCommands := getSafeReadOnlyCommands()
-	for _, safe := range safeReadOnlyCommands {
-		if strings.HasPrefix(cmdLower, strings.ToLower(safe)) {
+	for _, safe := range safeCommands {
+		if strings.HasPrefix(cmdLower, safe) {
 			if len(cmdLower) == len(safe) || cmdLower[len(safe)] == ' ' || cmdLower[len(safe)] == '-' {
 				isSafeReadOnly = true
 				break
@@ -413,6 +373,7 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 			permission.CreatePermissionRequest{
 				SessionID:   sessionID,
 				Path:        b.workingDir,
+				ToolCallID:  call.ID,
 				ToolName:    BashToolName,
 				Action:      "execute",
 				Description: fmt.Sprintf("Execute command: %s", params.Command),
@@ -431,9 +392,12 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		ctx, cancel = context.WithTimeout(ctx, time.Duration(params.Timeout)*time.Millisecond)
 		defer cancel()
 	}
-	stdout, stderr, err := shell.
-		GetPersistentShell(b.workingDir).
-		Exec(ctx, params.Command)
+
+	persistentShell := shell.GetPersistentShell(b.workingDir)
+	stdout, stderr, err := persistentShell.Exec(ctx, params.Command)
+
+	// Get the current working directory after command execution
+	currentWorkingDir := persistentShell.GetWorkingDir()
 	interrupted := shell.IsInterrupt(err)
 	exitCode := shell.ExitCode(err)
 	if exitCode == 0 && !interrupted && err != nil {
@@ -442,15 +406,6 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 
 	stdout = truncateOutput(stdout)
 	stderr = truncateOutput(stderr)
-
-	slog.Info("Bash command executed",
-		"command", params.Command,
-		"stdout", stdout,
-		"stderr", stderr,
-		"exit_code", exitCode,
-		"interrupted", interrupted,
-		"err", err,
-	)
 
 	errorMessage := stderr
 	if errorMessage == "" && err != nil {
@@ -480,12 +435,15 @@ func (b *bashTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	}
 
 	metadata := BashResponseMetadata{
-		StartTime: startTime.UnixMilli(),
-		EndTime:   time.Now().UnixMilli(),
+		StartTime:        startTime.UnixMilli(),
+		EndTime:          time.Now().UnixMilli(),
+		Output:           stdout,
+		WorkingDirectory: currentWorkingDir,
 	}
 	if stdout == "" {
 		return WithResponseMetadata(NewTextResponse(BashNoOutput), metadata), nil
 	}
+	stdout += fmt.Sprintf("\n\n<cwd>%s</cwd>", currentWorkingDir)
 	return WithResponseMetadata(NewTextResponse(stdout), metadata), nil
 }
 

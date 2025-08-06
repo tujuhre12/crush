@@ -4,18 +4,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
+	"maps"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
 
+	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"github.com/charmbracelet/crush/internal/csync"
 	"github.com/charmbracelet/crush/internal/env"
-	"github.com/charmbracelet/crush/internal/fur/client"
-	"github.com/charmbracelet/crush/internal/fur/provider"
 	"github.com/charmbracelet/crush/internal/log"
-	"golang.org/x/exp/slog"
 )
+
+const defaultCatwalkURL = "https://catwalk.charm.sh"
 
 // LoadReader config via io.Reader.
 func LoadReader(fd io.Reader) (*Config, error) {
@@ -60,8 +63,8 @@ func Load(workingDir string, debug bool) (*Config, error) {
 		cfg.Options.Debug,
 	)
 
-	// Load known providers, this loads the config from fur
-	providers, err := LoadProviders(client.New())
+	// Load known providers, this loads the config from catwalk
+	providers, err := Providers()
 	if err != nil || len(providers) == 0 {
 		return nil, fmt.Errorf("failed to load providers: %w", err)
 	}
@@ -87,16 +90,16 @@ func Load(workingDir string, debug bool) (*Config, error) {
 	return cfg, nil
 }
 
-func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, knownProviders []provider.Provider) error {
+func (c *Config) configureProviders(env env.Env, resolver VariableResolver, knownProviders []catwalk.Provider) error {
 	knownProviderNames := make(map[string]bool)
 	for _, p := range knownProviders {
 		knownProviderNames[string(p.ID)] = true
-		config, configExists := cfg.Providers[string(p.ID)]
+		config, configExists := c.Providers.Get(string(p.ID))
 		// if the user configured a known provider we need to allow it to override a couple of parameters
 		if configExists {
 			if config.Disable {
 				slog.Debug("Skipping provider due to disable flag", "provider", p.ID)
-				delete(cfg.Providers, string(p.ID))
+				c.Providers.Del(string(p.ID))
 				continue
 			}
 			if config.BaseURL != "" {
@@ -106,7 +109,7 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 				p.APIKey = config.APIKey
 			}
 			if len(config.Models) > 0 {
-				models := []provider.Model{}
+				models := []catwalk.Model{}
 				seen := make(map[string]bool)
 
 				for _, model := range config.Models {
@@ -114,8 +117,8 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 						continue
 					}
 					seen[model.ID] = true
-					if model.Model == "" {
-						model.Model = model.ID
+					if model.Name == "" {
+						model.Name = model.ID
 					}
 					models = append(models, model)
 				}
@@ -124,8 +127,8 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 						continue
 					}
 					seen[model.ID] = true
-					if model.Model == "" {
-						model.Model = model.ID
+					if model.Name == "" {
+						model.Name = model.ID
 					}
 					models = append(models, model)
 				}
@@ -133,37 +136,62 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 				p.Models = models
 			}
 		}
+
+		headers := map[string]string{}
+		if len(p.DefaultHeaders) > 0 {
+			maps.Copy(headers, p.DefaultHeaders)
+		}
+		if len(config.ExtraHeaders) > 0 {
+			maps.Copy(headers, config.ExtraHeaders)
+		}
 		prepared := ProviderConfig{
-			ID:           string(p.ID),
-			Name:         p.Name,
-			BaseURL:      p.APIEndpoint,
-			APIKey:       p.APIKey,
-			Type:         p.Type,
-			Disable:      config.Disable,
-			ExtraHeaders: config.ExtraHeaders,
-			ExtraParams:  make(map[string]string),
-			Models:       p.Models,
+			ID:                 string(p.ID),
+			Name:               p.Name,
+			BaseURL:            p.APIEndpoint,
+			APIKey:             p.APIKey,
+			Type:               p.Type,
+			Disable:            config.Disable,
+			SystemPromptPrefix: config.SystemPromptPrefix,
+			ExtraHeaders:       headers,
+			ExtraBody:          config.ExtraBody,
+			ExtraParams:        make(map[string]string),
+			Models:             p.Models,
 		}
 
 		switch p.ID {
 		// Handle specific providers that require additional configuration
-		case provider.InferenceProviderVertexAI:
+		case catwalk.InferenceProviderVertexAI:
 			if !hasVertexCredentials(env) {
 				if configExists {
 					slog.Warn("Skipping Vertex AI provider due to missing credentials")
-					delete(cfg.Providers, string(p.ID))
+					c.Providers.Del(string(p.ID))
 				}
 				continue
 			}
-			prepared.ExtraParams["project"] = env.Get("GOOGLE_CLOUD_PROJECT")
-			prepared.ExtraParams["location"] = env.Get("GOOGLE_CLOUD_LOCATION")
-		case provider.InferenceProviderBedrock:
+			prepared.ExtraParams["project"] = env.Get("VERTEXAI_PROJECT")
+			prepared.ExtraParams["location"] = env.Get("VERTEXAI_LOCATION")
+		case catwalk.InferenceProviderAzure:
+			endpoint, err := resolver.ResolveValue(p.APIEndpoint)
+			if err != nil || endpoint == "" {
+				if configExists {
+					slog.Warn("Skipping Azure provider due to missing API endpoint", "provider", p.ID, "error", err)
+					c.Providers.Del(string(p.ID))
+				}
+				continue
+			}
+			prepared.BaseURL = endpoint
+			prepared.ExtraParams["apiVersion"] = env.Get("AZURE_OPENAI_API_VERSION")
+		case catwalk.InferenceProviderBedrock:
 			if !hasAWSCredentials(env) {
 				if configExists {
 					slog.Warn("Skipping Bedrock provider due to missing AWS credentials")
-					delete(cfg.Providers, string(p.ID))
+					c.Providers.Del(string(p.ID))
 				}
 				continue
+			}
+			prepared.ExtraParams["region"] = env.Get("AWS_REGION")
+			if prepared.ExtraParams["region"] == "" {
+				prepared.ExtraParams["region"] = env.Get("AWS_DEFAULT_REGION")
 			}
 			for _, model := range p.Models {
 				if !strings.HasPrefix(model.ID, "anthropic.") {
@@ -176,16 +204,16 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 			if v == "" || err != nil {
 				if configExists {
 					slog.Warn("Skipping provider due to missing API key", "provider", p.ID)
-					delete(cfg.Providers, string(p.ID))
+					c.Providers.Del(string(p.ID))
 				}
 				continue
 			}
 		}
-		cfg.Providers[string(p.ID)] = prepared
+		c.Providers.Set(string(p.ID), prepared)
 	}
 
 	// validate the custom providers
-	for id, providerConfig := range cfg.Providers {
+	for id, providerConfig := range c.Providers.Seq2() {
 		if knownProviderNames[id] {
 			continue
 		}
@@ -197,12 +225,12 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 		}
 		// default to OpenAI if not set
 		if providerConfig.Type == "" {
-			providerConfig.Type = provider.TypeOpenAI
+			providerConfig.Type = catwalk.TypeOpenAI
 		}
 
 		if providerConfig.Disable {
 			slog.Debug("Skipping custom provider due to disable flag", "provider", id)
-			delete(cfg.Providers, id)
+			c.Providers.Del(id)
 			continue
 		}
 		if providerConfig.APIKey == "" {
@@ -210,17 +238,17 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 		}
 		if providerConfig.BaseURL == "" {
 			slog.Warn("Skipping custom provider due to missing API endpoint", "provider", id)
-			delete(cfg.Providers, id)
+			c.Providers.Del(id)
 			continue
 		}
 		if len(providerConfig.Models) == 0 {
 			slog.Warn("Skipping custom provider because the provider has no models", "provider", id)
-			delete(cfg.Providers, id)
+			c.Providers.Del(id)
 			continue
 		}
-		if providerConfig.Type != provider.TypeOpenAI {
+		if providerConfig.Type != catwalk.TypeOpenAI && providerConfig.Type != catwalk.TypeAnthropic {
 			slog.Warn("Skipping custom provider because the provider type is not supported", "provider", id, "type", providerConfig.Type)
-			delete(cfg.Providers, id)
+			c.Providers.Del(id)
 			continue
 		}
 
@@ -231,50 +259,50 @@ func (cfg *Config) configureProviders(env env.Env, resolver VariableResolver, kn
 		baseURL, err := resolver.ResolveValue(providerConfig.BaseURL)
 		if baseURL == "" || err != nil {
 			slog.Warn("Skipping custom provider due to missing API endpoint", "provider", id, "error", err)
-			delete(cfg.Providers, id)
+			c.Providers.Del(id)
 			continue
 		}
 
-		cfg.Providers[id] = providerConfig
+		c.Providers.Set(id, providerConfig)
 	}
 	return nil
 }
 
-func (cfg *Config) setDefaults(workingDir string) {
-	cfg.workingDir = workingDir
-	if cfg.Options == nil {
-		cfg.Options = &Options{}
+func (c *Config) setDefaults(workingDir string) {
+	c.workingDir = workingDir
+	if c.Options == nil {
+		c.Options = &Options{}
 	}
-	if cfg.Options.TUI == nil {
-		cfg.Options.TUI = &TUIOptions{}
+	if c.Options.TUI == nil {
+		c.Options.TUI = &TUIOptions{}
 	}
-	if cfg.Options.ContextPaths == nil {
-		cfg.Options.ContextPaths = []string{}
+	if c.Options.ContextPaths == nil {
+		c.Options.ContextPaths = []string{}
 	}
-	if cfg.Options.DataDirectory == "" {
-		cfg.Options.DataDirectory = filepath.Join(workingDir, defaultDataDirectory)
+	if c.Options.DataDirectory == "" {
+		c.Options.DataDirectory = filepath.Join(workingDir, defaultDataDirectory)
 	}
-	if cfg.Providers == nil {
-		cfg.Providers = make(map[string]ProviderConfig)
+	if c.Providers == nil {
+		c.Providers = csync.NewMap[string, ProviderConfig]()
 	}
-	if cfg.Models == nil {
-		cfg.Models = make(map[SelectedModelType]SelectedModel)
+	if c.Models == nil {
+		c.Models = make(map[SelectedModelType]SelectedModel)
 	}
-	if cfg.MCP == nil {
-		cfg.MCP = make(map[string]MCPConfig)
+	if c.MCP == nil {
+		c.MCP = make(map[string]MCPConfig)
 	}
-	if cfg.LSP == nil {
-		cfg.LSP = make(map[string]LSPConfig)
+	if c.LSP == nil {
+		c.LSP = make(map[string]LSPConfig)
 	}
 
 	// Add the default context paths if they are not already present
-	cfg.Options.ContextPaths = append(defaultContextPaths, cfg.Options.ContextPaths...)
-	slices.Sort(cfg.Options.ContextPaths)
-	cfg.Options.ContextPaths = slices.Compact(cfg.Options.ContextPaths)
+	c.Options.ContextPaths = append(defaultContextPaths, c.Options.ContextPaths...)
+	slices.Sort(c.Options.ContextPaths)
+	c.Options.ContextPaths = slices.Compact(c.Options.ContextPaths)
 }
 
-func (cfg *Config) defaultModelSelection(knownProviders []provider.Provider) (largeModel SelectedModel, smallModel SelectedModel, err error) {
-	if len(knownProviders) == 0 && len(cfg.Providers) == 0 {
+func (c *Config) defaultModelSelection(knownProviders []catwalk.Provider) (largeModel SelectedModel, smallModel SelectedModel, err error) {
+	if len(knownProviders) == 0 && c.Providers.Len() == 0 {
 		err = fmt.Errorf("no providers configured, please configure at least one provider")
 		return
 	}
@@ -282,11 +310,11 @@ func (cfg *Config) defaultModelSelection(knownProviders []provider.Provider) (la
 	// Use the first provider enabled based on the known providers order
 	// if no provider found that is known use the first provider configured
 	for _, p := range knownProviders {
-		providerConfig, ok := cfg.Providers[string(p.ID)]
+		providerConfig, ok := c.Providers.Get(string(p.ID))
 		if !ok || providerConfig.Disable {
 			continue
 		}
-		defaultLargeModel := cfg.GetModel(string(p.ID), p.DefaultLargeModelID)
+		defaultLargeModel := c.GetModel(string(p.ID), p.DefaultLargeModelID)
 		if defaultLargeModel == nil {
 			err = fmt.Errorf("default large model %s not found for provider %s", p.DefaultLargeModelID, p.ID)
 			return
@@ -298,7 +326,7 @@ func (cfg *Config) defaultModelSelection(knownProviders []provider.Provider) (la
 			ReasoningEffort: defaultLargeModel.DefaultReasoningEffort,
 		}
 
-		defaultSmallModel := cfg.GetModel(string(p.ID), p.DefaultSmallModelID)
+		defaultSmallModel := c.GetModel(string(p.ID), p.DefaultSmallModelID)
 		if defaultSmallModel == nil {
 			err = fmt.Errorf("default small model %s not found for provider %s", p.DefaultSmallModelID, p.ID)
 			return
@@ -312,7 +340,7 @@ func (cfg *Config) defaultModelSelection(knownProviders []provider.Provider) (la
 		return
 	}
 
-	enabledProviders := cfg.EnabledProviders()
+	enabledProviders := c.EnabledProviders()
 	slices.SortFunc(enabledProviders, func(a, b ProviderConfig) int {
 		return strings.Compare(a.ID, b.ID)
 	})
@@ -327,13 +355,13 @@ func (cfg *Config) defaultModelSelection(knownProviders []provider.Provider) (la
 		err = fmt.Errorf("provider %s has no models configured", providerConfig.ID)
 		return
 	}
-	defaultLargeModel := cfg.GetModel(providerConfig.ID, providerConfig.Models[0].ID)
+	defaultLargeModel := c.GetModel(providerConfig.ID, providerConfig.Models[0].ID)
 	largeModel = SelectedModel{
 		Provider:  providerConfig.ID,
 		Model:     defaultLargeModel.ID,
 		MaxTokens: defaultLargeModel.DefaultMaxTokens,
 	}
-	defaultSmallModel := cfg.GetModel(providerConfig.ID, providerConfig.Models[0].ID)
+	defaultSmallModel := c.GetModel(providerConfig.ID, providerConfig.Models[0].ID)
 	smallModel = SelectedModel{
 		Provider:  providerConfig.ID,
 		Model:     defaultSmallModel.ID,
@@ -342,14 +370,14 @@ func (cfg *Config) defaultModelSelection(knownProviders []provider.Provider) (la
 	return
 }
 
-func (cfg *Config) configureSelectedModels(knownProviders []provider.Provider) error {
-	defaultLarge, defaultSmall, err := cfg.defaultModelSelection(knownProviders)
+func (c *Config) configureSelectedModels(knownProviders []catwalk.Provider) error {
+	defaultLarge, defaultSmall, err := c.defaultModelSelection(knownProviders)
 	if err != nil {
 		return fmt.Errorf("failed to select default models: %w", err)
 	}
 	large, small := defaultLarge, defaultSmall
 
-	largeModelSelected, largeModelConfigured := cfg.Models[SelectedModelTypeLarge]
+	largeModelSelected, largeModelConfigured := c.Models[SelectedModelTypeLarge]
 	if largeModelConfigured {
 		if largeModelSelected.Model != "" {
 			large.Model = largeModelSelected.Model
@@ -357,11 +385,11 @@ func (cfg *Config) configureSelectedModels(knownProviders []provider.Provider) e
 		if largeModelSelected.Provider != "" {
 			large.Provider = largeModelSelected.Provider
 		}
-		model := cfg.GetModel(large.Provider, large.Model)
+		model := c.GetModel(large.Provider, large.Model)
 		if model == nil {
 			large = defaultLarge
 			// override the model type to large
-			err := cfg.UpdatePreferredModel(SelectedModelTypeLarge, large)
+			err := c.UpdatePreferredModel(SelectedModelTypeLarge, large)
 			if err != nil {
 				return fmt.Errorf("failed to update preferred large model: %w", err)
 			}
@@ -377,7 +405,7 @@ func (cfg *Config) configureSelectedModels(knownProviders []provider.Provider) e
 			large.Think = largeModelSelected.Think
 		}
 	}
-	smallModelSelected, smallModelConfigured := cfg.Models[SelectedModelTypeSmall]
+	smallModelSelected, smallModelConfigured := c.Models[SelectedModelTypeSmall]
 	if smallModelConfigured {
 		if smallModelSelected.Model != "" {
 			small.Model = smallModelSelected.Model
@@ -386,11 +414,11 @@ func (cfg *Config) configureSelectedModels(knownProviders []provider.Provider) e
 			small.Provider = smallModelSelected.Provider
 		}
 
-		model := cfg.GetModel(small.Provider, small.Model)
+		model := c.GetModel(small.Provider, small.Model)
 		if model == nil {
 			small = defaultSmall
 			// override the model type to small
-			err := cfg.UpdatePreferredModel(SelectedModelTypeSmall, small)
+			err := c.UpdatePreferredModel(SelectedModelTypeSmall, small)
 			if err != nil {
 				return fmt.Errorf("failed to update preferred small model: %w", err)
 			}
@@ -404,8 +432,8 @@ func (cfg *Config) configureSelectedModels(knownProviders []provider.Provider) e
 			small.Think = smallModelSelected.Think
 		}
 	}
-	cfg.Models[SelectedModelTypeLarge] = large
-	cfg.Models[SelectedModelTypeSmall] = small
+	c.Models[SelectedModelTypeLarge] = large
+	c.Models[SelectedModelTypeSmall] = small
 	return nil
 }
 
@@ -442,10 +470,9 @@ func loadFromReaders(readers []io.Reader) (*Config, error) {
 }
 
 func hasVertexCredentials(env env.Env) bool {
-	useVertex := env.Get("GOOGLE_GENAI_USE_VERTEXAI") == "true"
-	hasProject := env.Get("GOOGLE_CLOUD_PROJECT") != ""
-	hasLocation := env.Get("GOOGLE_CLOUD_LOCATION") != ""
-	return useVertex && hasProject && hasLocation
+	hasProject := env.Get("VERTEXAI_PROJECT") != ""
+	hasLocation := env.Get("VERTEXAI_LOCATION") != ""
+	return hasProject && hasLocation
 }
 
 func hasAWSCredentials(env env.Env) bool {

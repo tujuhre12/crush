@@ -114,7 +114,7 @@ func (g *globTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 		searchPath = g.workingDir
 	}
 
-	files, truncated, err := globFiles(params.Pattern, searchPath, 100)
+	files, truncated, err := globFiles(ctx, params.Pattern, searchPath, 100)
 	if err != nil {
 		return ToolResponse{}, fmt.Errorf("error finding files: %w", err)
 	}
@@ -138,15 +138,15 @@ func (g *globTool) Run(ctx context.Context, call ToolCall) (ToolResponse, error)
 	), nil
 }
 
-func globFiles(pattern, searchPath string, limit int) ([]string, bool, error) {
-	cmdRg := fsext.GetRgCmd(pattern)
+func globFiles(ctx context.Context, pattern, searchPath string, limit int) ([]string, bool, error) {
+	cmdRg := getRgCmd(ctx, pattern)
 	if cmdRg != nil {
 		cmdRg.Dir = searchPath
 		matches, err := runRipgrep(cmdRg, searchPath, limit)
 		if err == nil {
 			return matches, len(matches) >= limit && limit > 0, nil
 		}
-		slog.Warn(fmt.Sprintf("Ripgrep execution failed: %v. Falling back to doublestar.", err))
+		slog.Warn("Ripgrep execution failed, falling back to doublestar", "error", err)
 	}
 
 	return fsext.GlobWithDoubleStar(pattern, searchPath, limit)
