@@ -7,6 +7,7 @@ import (
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
 
 	"github.com/charmbracelet/crush/internal/config"
+	"github.com/charmbracelet/crush/internal/llm/tokenizer"
 	"github.com/charmbracelet/crush/internal/llm/tools"
 	"github.com/charmbracelet/crush/internal/message"
 )
@@ -103,16 +104,47 @@ func (p *baseProvider[C]) cleanMessages(messages []message.Message) (cleaned []m
 
 func (p *baseProvider[C]) SendMessages(ctx context.Context, messages []message.Message, tools []tools.BaseTool) (*ProviderResponse, error) {
 	messages = p.cleanMessages(messages)
+	if err := p.preflight(messages, tools); err != nil {
+		return nil, err
+	}
 	return p.client.send(ctx, messages, tools)
 }
 
 func (p *baseProvider[C]) StreamResponse(ctx context.Context, messages []message.Message, tools []tools.BaseTool) <-chan ProviderEvent {
 	messages = p.cleanMessages(messages)
+	if err := p.preflight(messages, tools); err != nil {
+		ch := make(chan ProviderEvent, 1)
+		ch <- ProviderEvent{Type: EventError, Error: err}
+		close(ch)
+		return ch
+	}
 	return p.client.stream(ctx, messages, tools)
 }
 
 func (p *baseProvider[C]) Model() catwalk.Model {
 	return p.client.Model()
+}
+
+func (p *baseProvider[C]) preflight(messages []message.Message, tools []tools.BaseTool) error {
+	model := p.client.Model()
+	cfg := config.Get()
+	modelConfig := cfg.Models[config.SelectedModelTypeLarge]
+	if p.options.modelType == config.SelectedModelTypeSmall {
+		modelConfig = cfg.Models[config.SelectedModelTypeSmall]
+	}
+	maxOut := model.DefaultMaxTokens
+	if modelConfig.MaxTokens > 0 {
+		maxOut = modelConfig.MaxTokens
+	}
+	if p.options.maxTokens > 0 {
+		maxOut = p.options.maxTokens
+	}
+	if inputTokens, err := tokenizer.CountTokens(model, p.options.systemPromptPrefix, p.options.systemMessage, messages, tools); err == nil {
+		if int64(inputTokens)+maxOut > model.ContextWindow {
+			return fmt.Errorf("prompt exceeds context window: input_tokens=%d, max_output_tokens=%d, context_window=%d", inputTokens, maxOut, model.ContextWindow)
+		}
+	}
+	return nil
 }
 
 func WithModel(model config.SelectedModelType) ProviderClientOption {
