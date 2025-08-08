@@ -126,23 +126,10 @@ func (p *baseProvider[C]) Model() catwalk.Model {
 }
 
 func (p *baseProvider[C]) preflight(messages []message.Message, tools []tools.BaseTool) error {
-	model := p.client.Model()
-	cfg := config.Get()
-	modelConfig := cfg.Models[config.SelectedModelTypeLarge]
-	if p.options.modelType == config.SelectedModelTypeSmall {
-		modelConfig = cfg.Models[config.SelectedModelTypeSmall]
-	}
-	maxOut := model.DefaultMaxTokens
-	if modelConfig.MaxTokens > 0 {
-		maxOut = modelConfig.MaxTokens
-	}
-	if p.options.maxTokens > 0 {
-		maxOut = p.options.maxTokens
-	}
-	if inputTokens, err := tokenizer.CountTokens(model, p.options.systemPromptPrefix, p.options.systemMessage, messages, tools); err == nil {
-		if int64(inputTokens)+maxOut > model.ContextWindow {
-			return fmt.Errorf("prompt exceeds context window: input_tokens=%d, max_output_tokens=%d, context_window=%d", inputTokens, maxOut, model.ContextWindow)
-		}
+	model := p.options.model(p.options.modelType)
+	inputTokens, _ := tokenizer.CountTokens(model, p.options.systemPromptPrefix, p.options.systemMessage, messages, tools)
+	if int64(inputTokens) > model.ContextWindow-p.options.maxTokens {
+		return fmt.Errorf("prompt exceeds context window: input_tokens=%d, max_output_tokens=%d, context_window=%d", inputTokens, p.options.maxTokens, model.ContextWindow)
 	}
 	return nil
 }
