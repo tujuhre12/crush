@@ -281,8 +281,6 @@ func (a *anthropicClient) send(ctx context.Context, messages []message.Message, 
 		// Prepare messages on each attempt in case max_tokens was adjusted
 		preparedMessages := a.preparedMessages(a.convertMessages(messages), a.convertTools(tools))
 
-		_ = config.Get()
-
 		var opts []option.RequestOption
 		if a.isThinkingEnabled() {
 			opts = append(opts, option.WithHeaderAdd("anthropic-beta", "interleaved-thinking-2025-05-14"))
