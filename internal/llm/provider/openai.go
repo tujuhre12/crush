@@ -17,10 +17,10 @@ import (
 	"github.com/charmbracelet/crush/internal/log"
 	"github.com/charmbracelet/crush/internal/message"
 	"github.com/google/uuid"
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/option"
-	"github.com/openai/openai-go/packages/param"
-	"github.com/openai/openai-go/shared"
+	"github.com/openai/openai-go/v2"
+	"github.com/openai/openai-go/v2/option"
+	"github.com/openai/openai-go/v2/packages/param"
+	"github.com/openai/openai-go/v2/shared"
 )
 
 type openaiClient struct {
@@ -153,14 +153,16 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 
 			if len(msg.ToolCalls()) > 0 {
 				hasContent = true
-				assistantMsg.ToolCalls = make([]openai.ChatCompletionMessageToolCallParam, len(msg.ToolCalls()))
+				assistantMsg.ToolCalls = make([]openai.ChatCompletionMessageToolCallUnionParam, len(msg.ToolCalls()))
 				for i, call := range msg.ToolCalls() {
-					assistantMsg.ToolCalls[i] = openai.ChatCompletionMessageToolCallParam{
-						ID:   call.ID,
-						Type: "function",
-						Function: openai.ChatCompletionMessageToolCallFunctionParam{
-							Name:      call.Name,
-							Arguments: call.Input,
+					assistantMsg.ToolCalls[i] = openai.ChatCompletionMessageToolCallUnionParam{
+						OfFunction: &openai.ChatCompletionMessageFunctionToolCallParam{
+							ID:   call.ID,
+							Type: "function",
+							Function: openai.ChatCompletionMessageFunctionToolCallFunctionParam{
+								Name:      call.Name,
+								Arguments: call.Input,
+							},
 						},
 					}
 				}
@@ -185,20 +187,18 @@ func (o *openaiClient) convertMessages(messages []message.Message) (openaiMessag
 	return
 }
 
-func (o *openaiClient) convertTools(tools []tools.BaseTool) []openai.ChatCompletionToolParam {
-	openaiTools := make([]openai.ChatCompletionToolParam, len(tools))
+func (o *openaiClient) convertTools(tools []tools.BaseTool) []openai.FunctionDefinitionParam {
+	openaiTools := make([]openai.FunctionDefinitionParam, len(tools))
 
 	for i, tool := range tools {
 		info := tool.Info()
-		openaiTools[i] = openai.ChatCompletionToolParam{
-			Function: openai.FunctionDefinitionParam{
-				Name:        info.Name,
-				Description: openai.String(info.Description),
-				Parameters: openai.FunctionParameters{
-					"type":       "object",
-					"properties": info.Parameters,
-					"required":   info.Required,
-				},
+		openaiTools[i] = openai.FunctionDefinitionParam{
+			Name:        info.Name,
+			Description: openai.String(info.Description),
+			Parameters: openai.FunctionParameters{
+				"type":       "object",
+				"properties": info.Parameters,
+				"required":   info.Required,
 			},
 		}
 	}
@@ -219,7 +219,7 @@ func (o *openaiClient) finishReason(reason string) message.FinishReason {
 	}
 }
 
-func (o *openaiClient) preparedParams(messages []openai.ChatCompletionMessageParamUnion, tools []openai.ChatCompletionToolParam) openai.ChatCompletionNewParams {
+func (o *openaiClient) preparedParams(messages []openai.ChatCompletionMessageParamUnion, tools []openai.FunctionDefinitionParam) openai.ChatCompletionNewParams {
 	model := o.providerOptions.model(o.providerOptions.modelType)
 	cfg := config.Get()
 
@@ -233,7 +233,10 @@ func (o *openaiClient) preparedParams(messages []openai.ChatCompletionMessagePar
 	params := openai.ChatCompletionNewParams{
 		Model:    openai.ChatModel(model.ID),
 		Messages: messages,
-		Tools:    tools,
+	}
+
+	for _, t := range tools {
+		params.Tools = append(params.Tools, openai.ChatCompletionFunctionTool(t))
 	}
 
 	maxTokens := model.DefaultMaxTokens
@@ -342,7 +345,7 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 			acc := openai.ChatCompletionAccumulator{}
 			currentContent := ""
 			toolCalls := make([]message.ToolCall, 0)
-			var msgToolCalls []openai.ChatCompletionMessageToolCall
+			var msgToolCalls []openai.ChatCompletionMessageToolCallUnion
 			for openaiStream.Next() {
 				chunk := openaiStream.Current()
 				// Kujtim: this is an issue with openrouter qwen, its sending -1 for the tool index
@@ -403,10 +406,10 @@ func (o *openaiClient) stream(ctx context.Context, messages []message.Message, t
 									Finished: false,
 								},
 							}
-							msgToolCalls = append(msgToolCalls, openai.ChatCompletionMessageToolCall{
+							msgToolCalls = append(msgToolCalls, openai.ChatCompletionMessageToolCallUnion{
 								ID:   toolCall.ID,
 								Type: "function",
-								Function: openai.ChatCompletionMessageToolCallFunction{
+								Function: openai.ChatCompletionMessageFunctionToolCallFunction{
 									Name:      toolCall.Function.Name,
 									Arguments: toolCall.Function.Arguments,
 								},

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/catwalk/pkg/catwalk"
+	"github.com/charmbracelet/crush/internal/ai"
 )
 
 type MessageRole string
@@ -13,7 +14,6 @@ type MessageRole string
 const (
 	Assistant MessageRole = "assistant"
 	User      MessageRole = "user"
-	System    MessageRole = "system"
 	Tool      MessageRole = "tool"
 )
 
@@ -74,6 +74,7 @@ type BinaryContent struct {
 	Data     []byte
 }
 
+// TODO: remove this from the content
 func (bc BinaryContent) String(p catwalk.InferenceProvider) string {
 	base64Encoded := base64.StdEncoding.EncodeToString(bc.Data)
 	if p == catwalk.InferenceProviderOpenAI {
@@ -85,19 +86,23 @@ func (bc BinaryContent) String(p catwalk.InferenceProvider) string {
 func (BinaryContent) isPart() {}
 
 type ToolCall struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Input    string `json:"input"`
-	Type     string `json:"type"`
-	Finished bool   `json:"finished"`
+	ID               string `json:"id"`
+	Name             string `json:"name"`
+	Input            string `json:"input"`
+	ProviderExecuted bool   `json:"provider_executed"`
+	Type             string `json:"type"`
+	Finished         bool   `json:"finished"`
 }
 
 func (ToolCall) isPart() {}
 
+// TODO: make the tool result content be either string, or media content
 type ToolResult struct {
 	ToolCallID string `json:"tool_call_id"`
 	Name       string `json:"name"`
 	Content    string `json:"content"`
+	Data       string `json:"data"`
+	MIMEType   string `json:"mime_type"`
 	Metadata   string `json:"metadata"`
 	IsError    bool   `json:"is_error"`
 }
@@ -383,4 +388,66 @@ func (m *Message) AddImageURL(url, detail string) {
 
 func (m *Message) AddBinary(mimeType string, data []byte) {
 	m.Parts = append(m.Parts, BinaryContent{MIMEType: mimeType, Data: data})
+}
+
+func (m *Message) ToAIMessage() ai.Message {
+	var role ai.MessageRole
+	var parts []ai.MessagePart
+	switch m.Role {
+	case User:
+		role = ai.MessageRoleUser
+		if m.Content().Text != "" {
+			parts = append(parts, ai.TextPart{Text: m.Content().Text})
+		}
+		for _, content := range m.BinaryContent() {
+			parts = append(parts, ai.FilePart{
+				Filename:  content.Path,
+				Data:      content.Data,
+				MediaType: content.MIMEType,
+			})
+		}
+	case Assistant:
+		role = ai.MessageRoleAssistant
+		if m.Content().Text != "" {
+			parts = append(parts, ai.TextPart{Text: m.Content().Text})
+		}
+		for _, call := range m.ToolCalls() {
+			parts = append(parts, ai.ToolCallPart{
+				ToolCallID:       call.ID,
+				ToolName:         call.Name,
+				Input:            call.Input,
+				ProviderExecuted: call.ProviderExecuted,
+			})
+		}
+	case Tool:
+		role = ai.MessageRoleTool
+		for _, result := range m.ToolResults() {
+			var content ai.ToolResultOutputContent
+			if result.IsError {
+				content = ai.ToolResultOutputContentError{
+					Error: result.Content,
+				}
+			} else if result.Data != "" {
+				content = ai.ToolResultOutputContentMedia{
+					Data:      result.Data,
+					MediaType: result.MIMEType,
+				}
+			} else {
+				content = ai.ToolResultOutputContentText{
+					Text: result.Content,
+				}
+			}
+			parts = append(parts, ai.ToolResultPart{
+				ToolCallID: result.ToolCallID,
+				Output:     content,
+			})
+		}
+	}
+
+	msg := ai.Message{
+		Role:    role,
+		Content: parts,
+	}
+
+	return msg
 }
