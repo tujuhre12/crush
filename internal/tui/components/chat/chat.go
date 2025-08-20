@@ -575,7 +575,7 @@ func (m *messageListCmp) buildToolResultMap(messages []message.Message) map[stri
 
 // convertMessagesToUI converts database messages to UI components.
 func (m *messageListCmp) convertMessagesToUI(sessionMessages []message.Message, toolResultMap map[string]message.ToolResult) []list.Item {
-	uiMessages := make([]list.Item, 0, len(sessionMessages)*2) // Pre-allocate with reasonable capacity
+	uiMessages := make([]list.Item, 0)
 
 	for _, msg := range sessionMessages {
 		switch msg.Role {
