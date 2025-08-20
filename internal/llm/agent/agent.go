@@ -355,10 +355,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	}
 
 	genCtx, cancel := context.WithCancel(ctx)
-	defer cancel() // Ensure cancel is always called
-
 	a.activeRequests.Set(sessionID, cancel)
-	defer a.activeRequests.Del(sessionID) // Clean up on exit
 
 	go func() {
 		slog.Debug("Request started", "sessionID", sessionID)
@@ -374,6 +371,8 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 			slog.Error(result.Error.Error())
 		}
 		slog.Debug("Request completed", "sessionID", sessionID)
+		a.activeRequests.Del(sessionID)
+		cancel()
 		a.Publish(pubsub.CreatedEvent, result)
 		events <- result
 		close(events)
