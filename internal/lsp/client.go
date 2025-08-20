@@ -72,7 +72,6 @@ type Client struct {
 	shutdownChan       chan struct{}
 	stderrDone         chan struct{}
 	messageHandlerDone chan struct{}
-	healthCheckDone    chan struct{}
 }
 
 // NewClient creates a new LSP client.
@@ -113,7 +112,6 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 		shutdownChan:          make(chan struct{}),
 		stderrDone:            make(chan struct{}),
 		messageHandlerDone:    make(chan struct{}),
-		healthCheckDone:       make(chan struct{}),
 	}
 
 	// Initialize server state
@@ -148,12 +146,6 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 			slog.Error("LSP message handler crashed, LSP functionality may be impaired")
 		})
 		client.handleMessages()
-	}()
-
-	// Start health check and cleanup goroutine
-	go func() {
-		defer close(client.healthCheckDone)
-		client.startHealthCheckAndCleanup(ctx)
 	}()
 
 	return client, nil
@@ -390,8 +382,11 @@ func (c *Client) WaitForServerReady(ctx context.Context) error {
 			c.SetServerState(StateError)
 			return fmt.Errorf("timeout waiting for LSP server to be ready")
 		case <-ticker.C:
-			// Try a ping method appropriate for this server type
-			err := c.pingServerByType(ctx, serverType)
+			// Try a simple workspace/symbol request to check if server is ready
+			var symbols []protocol.WorkspaceSymbol
+			err := c.Call(ctx, "workspace/symbol", protocol.WorkspaceSymbolParams{
+				Query: "",
+			}, &symbols)
 			if err == nil {
 				// Server responded successfully
 				c.SetServerState(StateReady)
@@ -399,8 +394,6 @@ func (c *Client) WaitForServerReady(ctx context.Context) error {
 					slog.Debug("LSP server is ready")
 				}
 				return nil
-			} else {
-				slog.Debug("LSP server not ready yet", "error", err, "serverType", serverType)
 			}
 
 			if cfg.Options.DebugLSP {
@@ -487,88 +480,6 @@ func (c *Client) openKeyConfigFiles(ctx context.Context) {
 	}
 }
 
-// pingServerByType sends a ping request appropriate for the server type
-func (c *Client) pingServerByType(ctx context.Context, serverType ServerType) error {
-	switch serverType {
-	case ServerTypeTypeScript:
-		// For TypeScript, try a document symbol request on an open file
-		return c.pingTypeScriptServer(ctx)
-	case ServerTypeGo:
-		// For Go, workspace/symbol works well
-		return c.pingWithWorkspaceSymbol(ctx)
-	case ServerTypeRust:
-		// For Rust, workspace/symbol works well
-		return c.pingWithWorkspaceSymbol(ctx)
-	default:
-		// Default ping method
-		return c.pingWithWorkspaceSymbol(ctx)
-	}
-}
-
-// pingTypeScriptServer tries to ping a TypeScript server with appropriate methods
-func (c *Client) pingTypeScriptServer(ctx context.Context) error {
-	// First try workspace/symbol which works for many servers
-	if err := c.pingWithWorkspaceSymbol(ctx); err == nil {
-		return nil
-	}
-
-	// If that fails, try to find an open file and request document symbols
-	c.openFilesMu.RLock()
-	defer c.openFilesMu.RUnlock()
-
-	// If we have any open files, try to get document symbols for one
-	for uri := range c.openFiles {
-		filePath, err := protocol.DocumentURI(uri).Path()
-		if err != nil {
-			slog.Error("Failed to convert URI to path for TypeScript symbol collection", "uri", uri, "error", err)
-			continue
-		}
-
-		if strings.HasSuffix(filePath, ".ts") || strings.HasSuffix(filePath, ".js") ||
-			strings.HasSuffix(filePath, ".tsx") || strings.HasSuffix(filePath, ".jsx") {
-			var symbols []protocol.DocumentSymbol
-			err := c.Call(ctx, "textDocument/documentSymbol", protocol.DocumentSymbolParams{
-				TextDocument: protocol.TextDocumentIdentifier{
-					URI: protocol.DocumentURI(uri),
-				},
-			}, &symbols)
-			if err == nil {
-				return nil
-			}
-		}
-	}
-
-	// If we have no open TypeScript files, try to find and open one
-	workDir := config.Get().WorkingDir()
-	err := filepath.WalkDir(workDir, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-
-		// Skip directories and non-TypeScript files
-		if d.IsDir() {
-			return nil
-		}
-
-		ext := filepath.Ext(path)
-		if ext == ".ts" || ext == ".js" || ext == ".tsx" || ext == ".jsx" {
-			// Found a TypeScript file, try to open it
-			if err := c.OpenFile(ctx, path); err == nil {
-				// Successfully opened, stop walking
-				return filepath.SkipAll
-			}
-		}
-
-		return nil
-	})
-	if err != nil {
-		slog.Debug("Error walking directory for TypeScript files", "error", err)
-	}
-
-	// Final fallback - just try a generic capability
-	return c.pingWithServerCapabilities(ctx)
-}
-
 // openTypeScriptFiles finds and opens TypeScript files to help initialize the server
 func (c *Client) openTypeScriptFiles(ctx context.Context, workDir string) {
 	cfg := config.Get()
@@ -639,20 +550,6 @@ func shouldSkipDir(path string) bool {
 	}
 
 	return skipDirs[dirName]
-}
-
-// pingWithWorkspaceSymbol tries a workspace/symbol request
-func (c *Client) pingWithWorkspaceSymbol(ctx context.Context) error {
-	var result []protocol.SymbolInformation
-	return c.Call(ctx, "workspace/symbol", protocol.WorkspaceSymbolParams{
-		Query: "",
-	}, &result)
-}
-
-// pingWithServerCapabilities tries to get server capabilities
-func (c *Client) pingWithServerCapabilities(ctx context.Context) error {
-	// This is a very lightweight request that should work for most servers
-	return c.Notify(ctx, "$/cancelRequest", struct{ ID int }{ID: -1})
 }
 
 type OpenFileInfo struct {
@@ -890,72 +787,4 @@ func (c *Client) ClearDiagnosticsForURI(uri protocol.DocumentURI) {
 	c.diagnosticsMu.Lock()
 	defer c.diagnosticsMu.Unlock()
 	delete(c.diagnostics, uri)
-}
-
-// startHealthCheckAndCleanup runs periodic health checks and cleans up stale handlers
-func (c *Client) startHealthCheckAndCleanup(ctx context.Context) {
-	healthTicker := time.NewTicker(30 * time.Second)
-	cleanupTicker := time.NewTicker(60 * time.Second)
-	defer healthTicker.Stop()
-	defer cleanupTicker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-c.shutdownChan:
-			return
-		case <-healthTicker.C:
-			// Perform health check
-			if c.GetServerState() == StateReady {
-				// Try a simple ping to check if server is still responsive
-				pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-				err := c.pingServerByType(pingCtx, c.detectServerType())
-				cancel()
-				if err != nil {
-					slog.Warn("LSP server health check failed", "name", c.name, "error", err)
-					c.SetServerState(StateError)
-				}
-			}
-		case <-cleanupTicker.C:
-			// Clean up stale pending requests
-			c.cleanupStaleHandlers()
-		}
-	}
-}
-
-// cleanupStaleHandlers removes handlers for requests that have been pending too long
-func (c *Client) cleanupStaleHandlers() {
-	threshold := time.Now().Add(-5 * time.Minute)
-	var staleIDs []int32
-
-	// Find stale requests
-	c.pendingRequestsMu.RLock()
-	for id, timestamp := range c.pendingRequests {
-		if timestamp.Before(threshold) {
-			staleIDs = append(staleIDs, id)
-		}
-	}
-	c.pendingRequestsMu.RUnlock()
-
-	if len(staleIDs) == 0 {
-		return
-	}
-
-	// Clean up stale handlers
-	c.handlersMu.Lock()
-	c.pendingRequestsMu.Lock()
-	for _, id := range staleIDs {
-		if ch, exists := c.handlers[id]; exists {
-			close(ch)
-			delete(c.handlers, id)
-		}
-		delete(c.pendingRequests, id)
-	}
-	c.pendingRequestsMu.Unlock()
-	c.handlersMu.Unlock()
-
-	if len(staleIDs) > 0 {
-		slog.Debug("Cleaned up stale LSP handlers", "count", len(staleIDs), "name", c.name)
-	}
 }

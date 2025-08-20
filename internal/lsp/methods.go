@@ -283,7 +283,6 @@ func (c *Client) Shutdown(ctx context.Context) error {
 		go func() {
 			<-c.stderrDone
 			<-c.messageHandlerDone
-			<-c.healthCheckDone
 			close(done)
 		}()
 
