@@ -2,10 +2,11 @@ package pubsub
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 )
 
-const bufferSize = 64
+const bufferSize = 256
 
 type Broker[T any] struct {
 	subs      map[chan Event[T]]struct{}
@@ -111,8 +112,11 @@ func (b *Broker[T]) Publish(t EventType, payload T) {
 		select {
 		case sub <- event:
 		default:
-			// Channel is full, subscriber is slow - skip this event
-			// This prevents blocking the publisher
+			// Channel is full, subscriber is slow
+			// Log this for debugging but don't block
+			if b.GetSubscriberCount() > 0 {
+				slog.Debug("Dropping event for slow subscriber", "eventType", t)
+			}
 		}
 	}
 }

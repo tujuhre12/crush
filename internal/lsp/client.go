@@ -62,6 +62,12 @@ type Client struct {
 
 	// Server state
 	serverState atomic.Value
+
+	// Shutdown tracking
+	shutdownOnce       sync.Once
+	shutdownChan       chan struct{}
+	stderrDone         chan struct{}
+	messageHandlerDone chan struct{}
 }
 
 // NewClient creates a new LSP client.
@@ -98,6 +104,9 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 		serverRequestHandlers: make(map[string]ServerRequestHandler),
 		diagnostics:           make(map[protocol.DocumentURI][]protocol.Diagnostic),
 		openFiles:             make(map[string]*OpenFileInfo),
+		shutdownChan:          make(chan struct{}),
+		stderrDone:            make(chan struct{}),
+		messageHandlerDone:    make(chan struct{}),
 	}
 
 	// Initialize server state
@@ -110,9 +119,15 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 
 	// Handle stderr in a separate goroutine
 	go func() {
+		defer close(client.stderrDone)
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			slog.Error("LSP Server", "err", scanner.Text())
+			select {
+			case <-client.shutdownChan:
+				return
+			default:
+				slog.Error("LSP Server", "err", scanner.Text())
+			}
 		}
 		if err := scanner.Err(); err != nil {
 			slog.Error("Error reading", "err", err)
@@ -121,6 +136,7 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 
 	// Start message handling loop
 	go func() {
+		defer close(client.messageHandlerDone)
 		defer log.RecoverPanic("LSP-message-handler", func() {
 			slog.Error("LSP message handler crashed, LSP functionality may be impaired")
 		})

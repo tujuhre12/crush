@@ -3,6 +3,8 @@ package lsp
 
 import (
 	"context"
+	"log/slog"
+	"time"
 
 	"github.com/charmbracelet/crush/internal/lsp/protocol"
 )
@@ -239,10 +241,56 @@ func (c *Client) Initialize(ctx context.Context, params protocol.ParamInitialize
 	return result, err
 }
 
-// Shutdown sends a shutdown request to the LSP server.
+// Shutdown sends a shutdown request to the LSP server and cleans up resources.
 // A shutdown request is sent from the client to the server. It is sent once when the client decides to shutdown the server. The only notification that is sent after a shutdown request is the exit event.
 func (c *Client) Shutdown(ctx context.Context) error {
-	return c.Call(ctx, "shutdown", nil, nil)
+	var shutdownErr error
+	c.shutdownOnce.Do(func() {
+		// Signal shutdown to goroutines
+		close(c.shutdownChan)
+
+		// Send shutdown request to server
+		shutdownErr = c.Call(ctx, "shutdown", nil, nil)
+
+		// Clean up handlers map to prevent memory leaks
+		c.handlersMu.Lock()
+		for id, ch := range c.handlers {
+			close(ch)
+			delete(c.handlers, id)
+		}
+		c.handlersMu.Unlock()
+
+		// Clean up open files map
+		c.openFilesMu.Lock()
+		for uri := range c.openFiles {
+			delete(c.openFiles, uri)
+		}
+		c.openFilesMu.Unlock()
+
+		// Clean up diagnostics map
+		c.diagnosticsMu.Lock()
+		for uri := range c.diagnostics {
+			delete(c.diagnostics, uri)
+		}
+		c.diagnosticsMu.Unlock()
+
+		// Wait for goroutines to finish with timeout
+		done := make(chan struct{})
+		go func() {
+			<-c.stderrDone
+			<-c.messageHandlerDone
+			close(done)
+		}()
+
+		select {
+		case <-done:
+			// Goroutines finished cleanly
+		case <-time.After(2 * time.Second):
+			// Timeout waiting for goroutines
+			slog.Warn("Timeout waiting for LSP goroutines to finish", "name", c.name)
+		}
+	})
+	return shutdownErr
 }
 
 // WillSaveWaitUntil sends a textDocument/willSaveWaitUntil request to the LSP server.

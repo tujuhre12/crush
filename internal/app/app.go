@@ -78,7 +78,7 @@ func New(ctx context.Context, conn *sql.DB, cfg *config.Config) (*App, error) {
 
 		watcherCancelFuncs: csync.NewSlice[context.CancelFunc](),
 
-		events:          make(chan tea.Msg, 100),
+		events:          make(chan tea.Msg, 256),
 		serviceEventsWG: &sync.WaitGroup{},
 		tuiWG:           &sync.WaitGroup{},
 	}

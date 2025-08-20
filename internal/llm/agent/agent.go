@@ -355,8 +355,11 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	}
 
 	genCtx, cancel := context.WithCancel(ctx)
+	defer cancel() // Ensure cancel is always called
 
 	a.activeRequests.Set(sessionID, cancel)
+	defer a.activeRequests.Del(sessionID) // Clean up on exit
+
 	go func() {
 		slog.Debug("Request started", "sessionID", sessionID)
 		defer log.RecoverPanic("agent.Run", func() {
@@ -371,8 +374,6 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 			slog.Error(result.Error.Error())
 		}
 		slog.Debug("Request completed", "sessionID", sessionID)
-		a.activeRequests.Del(sessionID)
-		cancel()
 		a.Publish(pubsub.CreatedEvent, result)
 		events <- result
 		close(events)
@@ -387,12 +388,23 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
 	}
+
+	// sliding window to limit message history
+	maxMessagesInContext := cfg.Options.MaxMessages
+	if maxMessagesInContext > 0 && len(msgs) > maxMessagesInContext {
+		// Keep the first message (usually system/context) and the last N-1 messages
+		msgs = append(msgs[:1], msgs[len(msgs)-maxMessagesInContext+1:]...)
+	}
+
 	if len(msgs) == 0 {
+		// Use a context with timeout for title generation
+		titleCtx, titleCancel := context.WithTimeout(context.Background(), 30*time.Second)
 		go func() {
+			defer titleCancel()
 			defer log.RecoverPanic("agent.Run", func() {
 				slog.Error("panic while generating title")
 			})
-			titleErr := a.generateTitle(context.Background(), sessionID, content)
+			titleErr := a.generateTitle(titleCtx, sessionID, content)
 			if titleErr != nil && !errors.Is(titleErr, context.Canceled) && !errors.Is(titleErr, context.DeadlineExceeded) {
 				slog.Error("failed to generate title", "error", titleErr)
 			}

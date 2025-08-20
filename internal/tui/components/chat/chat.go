@@ -575,7 +575,7 @@ func (m *messageListCmp) buildToolResultMap(messages []message.Message) map[stri
 
 // convertMessagesToUI converts database messages to UI components.
 func (m *messageListCmp) convertMessagesToUI(sessionMessages []message.Message, toolResultMap map[string]message.ToolResult) []list.Item {
-	uiMessages := make([]list.Item, 0)
+	uiMessages := make([]list.Item, 0, len(sessionMessages)*2) // Pre-allocate with reasonable capacity
 
 	for _, msg := range sessionMessages {
 		switch msg.Role {
@@ -595,7 +595,7 @@ func (m *messageListCmp) convertMessagesToUI(sessionMessages []message.Message, 
 
 // convertAssistantMessage converts an assistant message and its tool calls to UI components.
 func (m *messageListCmp) convertAssistantMessage(msg message.Message, toolResultMap map[string]message.ToolResult) []list.Item {
-	var uiMessages []list.Item
+	uiMessages := make([]list.Item, 0)
 
 	// Add assistant message if it should be displayed
 	if m.shouldShowAssistantMessage(msg) {
