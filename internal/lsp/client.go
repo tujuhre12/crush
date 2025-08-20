@@ -276,35 +276,50 @@ func (c *Client) InitializeLSPClient(ctx context.Context, workspaceDir string) (
 }
 
 func (c *Client) Close() error {
-	// Try to close all open files first
+	// Try graceful shutdown first
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Attempt to close files but continue shutdown regardless
+	// Attempt to close all files
 	c.CloseAllFiles(ctx)
 
+	// Do full shutdown following LSP spec
+	if err := c.Shutdown(ctx); err != nil {
+		slog.Warn("LSP shutdown failed during close", "name", c.name, "error", err)
+	}
+
 	// Close stdin to signal the server
-	if err := c.stdin.Close(); err != nil {
-		return fmt.Errorf("failed to close stdin: %w", err)
-	}
-
-	// Use a channel to handle the Wait with timeout
-	done := make(chan error, 1)
-	go func() {
-		done <- c.Cmd.Wait()
-	}()
-
-	// Wait for process to exit with timeout
-	select {
-	case err := <-done:
-		return err
-	case <-time.After(2 * time.Second):
-		// If we timeout, try to kill the process
-		if err := c.Cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("failed to kill process: %w", err)
+	if c.stdin != nil {
+		if err := c.stdin.Close(); err != nil {
+			slog.Warn("Failed to close stdin", "name", c.name, "error", err)
 		}
-		return fmt.Errorf("process killed after timeout")
 	}
+
+	// Terminate the process if still running
+	if c.Cmd != nil && c.Cmd.Process != nil {
+		// Use a channel to handle the Wait with timeout
+		done := make(chan error, 1)
+		go func() {
+			done <- c.Cmd.Wait()
+		}()
+
+		// Wait for process to exit with timeout
+		select {
+		case err := <-done:
+			if err != nil {
+				slog.Debug("LSP process exited with error", "name", c.name, "error", err)
+			}
+			return nil
+		case <-time.After(2 * time.Second):
+			// If we timeout, try to kill the process
+			if err := c.Cmd.Process.Kill(); err != nil {
+				return fmt.Errorf("failed to kill process: %w", err)
+			}
+			return fmt.Errorf("process killed after timeout")
+		}
+	}
+
+	return nil
 }
 
 type ServerState int
@@ -875,4 +890,72 @@ func (c *Client) ClearDiagnosticsForURI(uri protocol.DocumentURI) {
 	c.diagnosticsMu.Lock()
 	defer c.diagnosticsMu.Unlock()
 	delete(c.diagnostics, uri)
+}
+
+// startHealthCheckAndCleanup runs periodic health checks and cleans up stale handlers
+func (c *Client) startHealthCheckAndCleanup(ctx context.Context) {
+	healthTicker := time.NewTicker(30 * time.Second)
+	cleanupTicker := time.NewTicker(60 * time.Second)
+	defer healthTicker.Stop()
+	defer cleanupTicker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.shutdownChan:
+			return
+		case <-healthTicker.C:
+			// Perform health check
+			if c.GetServerState() == StateReady {
+				// Try a simple ping to check if server is still responsive
+				pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+				err := c.pingServerByType(pingCtx, c.detectServerType())
+				cancel()
+				if err != nil {
+					slog.Warn("LSP server health check failed", "name", c.name, "error", err)
+					c.SetServerState(StateError)
+				}
+			}
+		case <-cleanupTicker.C:
+			// Clean up stale pending requests
+			c.cleanupStaleHandlers()
+		}
+	}
+}
+
+// cleanupStaleHandlers removes handlers for requests that have been pending too long
+func (c *Client) cleanupStaleHandlers() {
+	threshold := time.Now().Add(-5 * time.Minute)
+	var staleIDs []int32
+
+	// Find stale requests
+	c.pendingRequestsMu.RLock()
+	for id, timestamp := range c.pendingRequests {
+		if timestamp.Before(threshold) {
+			staleIDs = append(staleIDs, id)
+		}
+	}
+	c.pendingRequestsMu.RUnlock()
+
+	if len(staleIDs) == 0 {
+		return
+	}
+
+	// Clean up stale handlers
+	c.handlersMu.Lock()
+	c.pendingRequestsMu.Lock()
+	for _, id := range staleIDs {
+		if ch, exists := c.handlers[id]; exists {
+			close(ch)
+			delete(c.handlers, id)
+		}
+		delete(c.pendingRequests, id)
+	}
+	c.pendingRequestsMu.Unlock()
+	c.handlersMu.Unlock()
+
+	if len(staleIDs) > 0 {
+		slog.Debug("Cleaned up stale LSP handlers", "count", len(staleIDs), "name", c.name)
+	}
 }

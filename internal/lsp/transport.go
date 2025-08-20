@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/crush/internal/config"
 )
@@ -186,9 +187,17 @@ func (c *Client) handleMessages() {
 	}
 }
 
-// Call makes a request and waits for the response
+// Call makes a request and waits for the response with timeout
 func (c *Client) Call(ctx context.Context, method string, params any, result any) error {
 	cfg := config.Get()
+
+	// Add default timeout if context doesn't have one
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, 30*time.Second)
+		defer cancel()
+	}
+
 	id := c.nextID.Add(1)
 
 	if cfg.Options.DebugLSP {
@@ -200,16 +209,24 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	// Create response channel
+	// Create response channel and track request
 	ch := make(chan *Message, 1)
 	c.handlersMu.Lock()
 	c.handlers[id] = ch
 	c.handlersMu.Unlock()
 
+	c.pendingRequestsMu.Lock()
+	c.pendingRequests[id] = time.Now()
+	c.pendingRequestsMu.Unlock()
+
 	defer func() {
 		c.handlersMu.Lock()
 		delete(c.handlers, id)
 		c.handlersMu.Unlock()
+
+		c.pendingRequestsMu.Lock()
+		delete(c.pendingRequests, id)
+		c.pendingRequestsMu.Unlock()
 	}()
 
 	// Send request
@@ -221,10 +238,10 @@ func (c *Client) Call(ctx context.Context, method string, params any, result any
 		slog.Debug("Request sent", "method", method, "id", id)
 	}
 
-	// Wait for response
+	// Wait for response with context timeout
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return fmt.Errorf("request timeout or cancelled for %s: %w", method, ctx.Err())
 	case resp := <-ch:
 		if cfg.Options.DebugLSP {
 			slog.Debug("Received response", "id", id)

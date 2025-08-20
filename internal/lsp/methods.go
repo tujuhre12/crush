@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/charmbracelet/crush/internal/config"
 	"github.com/charmbracelet/crush/internal/lsp/protocol"
 )
 
@@ -246,51 +247,88 @@ func (c *Client) Initialize(ctx context.Context, params protocol.ParamInitialize
 func (c *Client) Shutdown(ctx context.Context) error {
 	var shutdownErr error
 	c.shutdownOnce.Do(func() {
-		// Signal shutdown to goroutines
+		cfg := config.Get()
+
+		// Step 1: Send shutdown request (expects a response)
+		if cfg.Options.DebugLSP {
+			slog.Debug("Sending LSP shutdown request", "name", c.name)
+		}
+
+		shutdownCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+		defer cancel()
+
+		if err := c.Call(shutdownCtx, "shutdown", nil, nil); err != nil {
+			// Log but don't fail - server might already be shutting down
+			slog.Warn("LSP shutdown request failed", "name", c.name, "error", err)
+			shutdownErr = err
+		}
+
+		// Step 2: Send exit notification (no response expected)
+		if cfg.Options.DebugLSP {
+			slog.Debug("Sending LSP exit notification", "name", c.name)
+		}
+
+		if err := c.Notify(ctx, "exit", nil); err != nil {
+			slog.Warn("LSP exit notification failed", "name", c.name, "error", err)
+		}
+
+		// Step 3: Signal our goroutines to stop
 		close(c.shutdownChan)
 
-		// Send shutdown request to server
-		shutdownErr = c.Call(ctx, "shutdown", nil, nil)
+		// Step 4: Clean up resources
+		c.cleanupResources()
 
-		// Clean up handlers map to prevent memory leaks
-		c.handlersMu.Lock()
-		for id, ch := range c.handlers {
-			close(ch)
-			delete(c.handlers, id)
-		}
-		c.handlersMu.Unlock()
-
-		// Clean up open files map
-		c.openFilesMu.Lock()
-		for uri := range c.openFiles {
-			delete(c.openFiles, uri)
-		}
-		c.openFilesMu.Unlock()
-
-		// Clean up diagnostics map
-		c.diagnosticsMu.Lock()
-		for uri := range c.diagnostics {
-			delete(c.diagnostics, uri)
-		}
-		c.diagnosticsMu.Unlock()
-
-		// Wait for goroutines to finish with timeout
+		// Step 5: Wait for goroutines with timeout
 		done := make(chan struct{})
 		go func() {
 			<-c.stderrDone
 			<-c.messageHandlerDone
+			<-c.healthCheckDone
 			close(done)
 		}()
 
 		select {
 		case <-done:
-			// Goroutines finished cleanly
+			if cfg.Options.DebugLSP {
+				slog.Debug("LSP goroutines stopped cleanly", "name", c.name)
+			}
 		case <-time.After(2 * time.Second):
-			// Timeout waiting for goroutines
-			slog.Warn("Timeout waiting for LSP goroutines to finish", "name", c.name)
+			slog.Warn("Timeout waiting for LSP goroutines", "name", c.name)
 		}
 	})
 	return shutdownErr
+}
+
+// cleanupResources closes all handlers and cleans up internal state
+func (c *Client) cleanupResources() {
+	// Close all pending request handlers
+	c.handlersMu.Lock()
+	for id, ch := range c.handlers {
+		close(ch)
+		delete(c.handlers, id)
+	}
+	c.handlersMu.Unlock()
+
+	// Clear pending requests tracking
+	c.pendingRequestsMu.Lock()
+	for id := range c.pendingRequests {
+		delete(c.pendingRequests, id)
+	}
+	c.pendingRequestsMu.Unlock()
+
+	// Clear open files
+	c.openFilesMu.Lock()
+	for uri := range c.openFiles {
+		delete(c.openFiles, uri)
+	}
+	c.openFilesMu.Unlock()
+
+	// Clear diagnostics
+	c.diagnosticsMu.Lock()
+	for uri := range c.diagnostics {
+		delete(c.diagnostics, uri)
+	}
+	c.diagnosticsMu.Unlock()
 }
 
 // WillSaveWaitUntil sends a textDocument/willSaveWaitUntil request to the LSP server.
