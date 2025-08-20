@@ -44,6 +44,10 @@ type Client struct {
 	handlers   map[int32]chan *Message
 	handlersMu sync.RWMutex
 
+	// Request tracking for cleanup
+	pendingRequests   map[int32]time.Time
+	pendingRequestsMu sync.RWMutex
+
 	// Server request handlers
 	serverRequestHandlers map[string]ServerRequestHandler
 	serverHandlersMu      sync.RWMutex
@@ -68,6 +72,7 @@ type Client struct {
 	shutdownChan       chan struct{}
 	stderrDone         chan struct{}
 	messageHandlerDone chan struct{}
+	healthCheckDone    chan struct{}
 }
 
 // NewClient creates a new LSP client.
@@ -100,6 +105,7 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 		stdout:                bufio.NewReader(stdout),
 		stderr:                stderr,
 		handlers:              make(map[int32]chan *Message),
+		pendingRequests:       make(map[int32]time.Time),
 		notificationHandlers:  make(map[string]NotificationHandler),
 		serverRequestHandlers: make(map[string]ServerRequestHandler),
 		diagnostics:           make(map[protocol.DocumentURI][]protocol.Diagnostic),
@@ -107,6 +113,7 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 		shutdownChan:          make(chan struct{}),
 		stderrDone:            make(chan struct{}),
 		messageHandlerDone:    make(chan struct{}),
+		healthCheckDone:       make(chan struct{}),
 	}
 
 	// Initialize server state
@@ -141,6 +148,12 @@ func NewClient(ctx context.Context, name string, config config.LSPConfig) (*Clie
 			slog.Error("LSP message handler crashed, LSP functionality may be impaired")
 		})
 		client.handleMessages()
+	}()
+
+	// Start health check and cleanup goroutine
+	go func() {
+		defer close(client.healthCheckDone)
+		client.startHealthCheckAndCleanup(ctx)
 	}()
 
 	return client, nil
