@@ -315,9 +315,6 @@ func (c *Config) setDefaults(workingDir string) {
 	if c.Options.DataDirectory == "" {
 		c.Options.DataDirectory = filepath.Join(workingDir, defaultDataDirectory)
 	}
-	if c.Options.MaxMessages < 10 {
-		c.Options.MaxMessages = 50
-	}
 	if c.Providers == nil {
 		c.Providers = csync.NewMap[string, ProviderConfig]()
 	}

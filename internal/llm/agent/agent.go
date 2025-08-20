@@ -355,8 +355,8 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 	}
 
 	genCtx, cancel := context.WithCancel(ctx)
-	a.activeRequests.Set(sessionID, cancel)
 
+	a.activeRequests.Set(sessionID, cancel)
 	go func() {
 		slog.Debug("Request started", "sessionID", sessionID)
 		defer log.RecoverPanic("agent.Run", func() {
@@ -386,13 +386,6 @@ func (a *agent) processGeneration(ctx context.Context, sessionID, content string
 	msgs, err := a.messages.List(ctx, sessionID)
 	if err != nil {
 		return a.err(fmt.Errorf("failed to list messages: %w", err))
-	}
-
-	// sliding window to limit message history
-	maxMessagesInContext := cfg.Options.MaxMessages
-	if maxMessagesInContext > 0 && len(msgs) > maxMessagesInContext {
-		// Keep the first message (usually system/context) and the last N-1 messages
-		msgs = append(msgs[:1], msgs[len(msgs)-maxMessagesInContext+1:]...)
 	}
 
 	if len(msgs) == 0 {
