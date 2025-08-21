@@ -81,10 +81,6 @@ func NewFetchTool(permissions permission.Service, workingDir string) BaseTool {
 	}
 }
 
-func (t *fetchTool) Name() string {
-	return FetchToolName
-}
-
 func (t *fetchTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        FetchToolName,

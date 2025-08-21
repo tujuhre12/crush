@@ -77,10 +77,6 @@ func NewGlobTool(workingDir string) BaseTool {
 	}
 }
 
-func (g *globTool) Name() string {
-	return GlobToolName
-}
-
 func (g *globTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        GlobToolName,

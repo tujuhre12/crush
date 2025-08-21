@@ -2,6 +2,7 @@ package message
 
 import (
 	"encoding/base64"
+	"errors"
 	"slices"
 	"time"
 
@@ -425,7 +426,7 @@ func (m *Message) ToAIMessage() ai.Message {
 			var content ai.ToolResultOutputContent
 			if result.IsError {
 				content = ai.ToolResultOutputContentError{
-					Error: result.Content,
+					Error: errors.New(result.Content),
 				}
 			} else if result.Data != "" {
 				content = ai.ToolResultOutputContentMedia{

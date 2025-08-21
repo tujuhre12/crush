@@ -104,10 +104,6 @@ func NewMultiEditTool(lspClients map[string]*lsp.Client, permissions permission.
 	}
 }
 
-func (m *multiEditTool) Name() string {
-	return MultiEditToolName
-}
-
 func (m *multiEditTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        MultiEditToolName,

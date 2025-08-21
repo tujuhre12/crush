@@ -85,10 +85,6 @@ func NewLsTool(permissions permission.Service, workingDir string) BaseTool {
 	}
 }
 
-func (l *lsTool) Name() string {
-	return LSToolName
-}
-
 func (l *lsTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        LSToolName,

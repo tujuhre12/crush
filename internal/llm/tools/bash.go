@@ -314,10 +314,6 @@ func NewBashTool(permission permission.Service, workingDir string) BaseTool {
 	}
 }
 
-func (b *bashTool) Name() string {
-	return BashToolName
-}
-
 func (b *bashTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        BashToolName,

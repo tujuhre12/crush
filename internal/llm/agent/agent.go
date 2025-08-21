@@ -213,7 +213,7 @@ func NewAgent(
 
 		var filteredTools []tools.BaseTool
 		for _, tool := range allTools {
-			if slices.Contains(agentCfg.AllowedTools, tool.Name()) {
+			if slices.Contains(agentCfg.AllowedTools, tool.Info().Name) {
 				filteredTools = append(filteredTools, tool)
 			}
 		}

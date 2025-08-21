@@ -89,10 +89,6 @@ func NewViewTool(lspClients map[string]*lsp.Client, permissions permission.Servi
 	}
 }
 
-func (v *viewTool) Name() string {
-	return ViewToolName
-}
-
 func (v *viewTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        ViewToolName,

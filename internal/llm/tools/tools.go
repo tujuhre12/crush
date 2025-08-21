@@ -68,7 +68,6 @@ type ToolCall struct {
 
 type BaseTool interface {
 	Info() ToolInfo
-	Name() string
 	Run(ctx context.Context, params ToolCall) (ToolResponse, error)
 }
 

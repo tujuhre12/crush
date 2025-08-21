@@ -148,10 +148,6 @@ func NewGrepTool(workingDir string) BaseTool {
 	}
 }
 
-func (g *grepTool) Name() string {
-	return GrepToolName
-}
-
 func (g *grepTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        GrepToolName,

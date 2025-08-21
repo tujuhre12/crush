@@ -80,10 +80,6 @@ func NewDownloadTool(permissions permission.Service, workingDir string) BaseTool
 	}
 }
 
-func (t *downloadTool) Name() string {
-	return DownloadToolName
-}
-
 func (t *downloadTool) Info() ToolInfo {
 	return ToolInfo{
 		Name:        DownloadToolName,
