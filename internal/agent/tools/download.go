@@ -146,8 +146,8 @@ TIPS:
 			}
 
 			// Create parent directories if they don't exist
-			if err := os.MkdirAll(filepath.Dir(filePath), 0o755); err != nil {
-				return ai.ToolResponse{}, fmt.Errorf("failed to create parent directories: %w", err)
+			if mkdirErr := os.MkdirAll(filepath.Dir(filePath), 0o755); mkdirErr != nil {
+				return ai.ToolResponse{}, fmt.Errorf("failed to create parent directories: %w", mkdirErr)
 			}
 
 			// Create the output file

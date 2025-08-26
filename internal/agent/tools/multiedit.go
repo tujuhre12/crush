@@ -280,9 +280,9 @@ func processMultiEditExistingFile(ctx context.Context, params MultiEditParams, c
 
 	// Apply all edits sequentially
 	for i, edit := range params.Edits {
-		newContent, err := applyEditToContent(currentContent, edit)
-		if err != nil {
-			return ai.NewTextErrorResponse(fmt.Sprintf("edit %d failed: %s", i+1, err.Error())), nil
+		newContent, applyEditErr := applyEditToContent(currentContent, edit)
+		if applyEditErr != nil {
+			return ai.NewTextErrorResponse(fmt.Sprintf("edit %d failed: %s", i+1, applyEditErr.Error())), nil
 		}
 		currentContent = newContent
 	}
