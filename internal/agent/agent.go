@@ -347,19 +347,17 @@ func (a *agent) makeCall(ctx context.Context, agent ai.Agent, sessionID, prompt 
 				if signature, ok := anthropicData["signature"]; ok {
 					if str, ok := signature.(string); ok {
 						currentAssistant.AppendReasoningSignature(str)
-						return a.messages.Update(ctx, *currentAssistant)
 					}
 				}
 			}
-			return nil
+			currentAssistant.FinishThinking()
+			return a.messages.Update(ctx, *currentAssistant)
 		},
 		OnTextDelta: func(id string, text string) error {
-			currentAssistant.FinishThinking()
 			currentAssistant.AppendContent(text)
 			return a.messages.Update(ctx, *currentAssistant)
 		},
 		OnToolInputStart: func(id string, toolName string) error {
-			currentAssistant.FinishThinking()
 			toolCall := message.ToolCall{
 				ID:               id,
 				Name:             toolName,
@@ -411,7 +409,6 @@ func (a *agent) makeCall(ctx context.Context, agent ai.Agent, sessionID, prompt 
 		},
 		OnStepFinish: func(stepResult ai.StepResult) error {
 			slog.Info("Step Finished", "result", stepResult)
-			currentAssistant.FinishThinking()
 			finishReason := message.FinishReasonUnknown
 			switch stepResult.FinishReason {
 			case ai.FinishReasonLength:
