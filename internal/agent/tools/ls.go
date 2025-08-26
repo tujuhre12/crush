@@ -105,7 +105,6 @@ TIPS:
 
 			relPath, err := filepath.Rel(absWorkingDir, absSearchPath)
 			if err != nil || strings.HasPrefix(relPath, "..") {
-
 				sessionID, messageID := GetContextValues(ctx)
 				if sessionID == "" || messageID == "" {
 					return ai.ToolResponse{}, fmt.Errorf("session ID and message ID are required for the ls tool")
