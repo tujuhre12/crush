@@ -346,7 +346,7 @@ func (a *agent) makeCall(ctx context.Context, agent ai.Agent, sessionID, prompt 
 			if anthropicData, ok := reasoning.ProviderMetadata["anthropic"]; ok {
 				if signature, ok := anthropicData["signature"]; ok {
 					if str, ok := signature.(string); ok {
-						currentAssistant.AppendReasoningContent(str)
+						currentAssistant.AppendReasoningSignature(str)
 						return a.messages.Update(ctx, *currentAssistant)
 					}
 				}
