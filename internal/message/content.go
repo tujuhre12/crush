@@ -391,12 +391,11 @@ func (m *Message) AddBinary(mimeType string, data []byte) {
 	m.Parts = append(m.Parts, BinaryContent{MIMEType: mimeType, Data: data})
 }
 
-func (m *Message) ToAIMessage() ai.Message {
-	var role ai.MessageRole
-	var parts []ai.MessagePart
+func (m *Message) ToAIMessage() []ai.Message {
+	var messages []ai.Message
 	switch m.Role {
 	case User:
-		role = ai.MessageRoleUser
+		var parts []ai.MessagePart
 		if m.Content().Text != "" {
 			parts = append(parts, ai.TextPart{Text: m.Content().Text})
 		}
@@ -407,8 +406,12 @@ func (m *Message) ToAIMessage() ai.Message {
 				MediaType: content.MIMEType,
 			})
 		}
+		messages = append(messages, ai.Message{
+			Role:    ai.MessageRoleUser,
+			Content: parts,
+		})
 	case Assistant:
-		role = ai.MessageRoleAssistant
+		var parts []ai.MessagePart
 		if m.Content().Text != "" {
 			parts = append(parts, ai.TextPart{Text: m.Content().Text})
 		}
@@ -420,8 +423,11 @@ func (m *Message) ToAIMessage() ai.Message {
 				ProviderExecuted: call.ProviderExecuted,
 			})
 		}
-	case Tool:
-		role = ai.MessageRoleTool
+		messages = append(messages, ai.Message{
+			Role:    ai.MessageRoleAssistant,
+			Content: parts,
+		})
+		parts = []ai.MessagePart{}
 		for _, result := range m.ToolResults() {
 			var content ai.ToolResultOutputContent
 			if result.IsError {
@@ -443,12 +449,10 @@ func (m *Message) ToAIMessage() ai.Message {
 				Output:     content,
 			})
 		}
+		messages = append(messages, ai.Message{
+			Role:    ai.MessageRoleTool,
+			Content: parts,
+		})
 	}
-
-	msg := ai.Message{
-		Role:    role,
-		Content: parts,
-	}
-
-	return msg
+	return messages
 }
