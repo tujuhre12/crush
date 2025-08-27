@@ -193,7 +193,7 @@ func TestRenderVirtualScrolling(t *testing.T) {
 			createItem("C", 1),
 		}
 		
-		l := New(items, WithDirectionForward(), WithSize(5, 20), WithGap(1)).(*list[Item])
+		l := New(items, WithDirectionForward(), WithSize(20, 5), WithGap(1)).(*list[Item])
 		execCmd(l, l.Init())
 		
 		// Item positions: A(0-0), gap(1), B(2-2), gap(3), C(4-4)
@@ -220,7 +220,7 @@ func TestRenderVirtualScrolling(t *testing.T) {
 			createItem("E", 2),
 		}
 		
-		l := New(items, WithDirectionForward(), WithSize(4, 20)).(*list[Item])
+		l := New(items, WithDirectionForward(), WithSize(20, 4)).(*list[Item])
 		execCmd(l, l.Init())
 		l.calculateItemPositions()
 		
@@ -247,7 +247,7 @@ func TestRenderVirtualScrolling(t *testing.T) {
 			createItem("D", 3),
 		}
 		
-		l := New(items, WithDirectionForward(), WithSize(5, 20)).(*list[Item])
+		l := New(items, WithDirectionForward(), WithSize(20, 5)).(*list[Item])
 		execCmd(l, l.Init())
 		l.calculateItemPositions()
 		
