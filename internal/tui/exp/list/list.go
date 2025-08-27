@@ -1231,6 +1231,13 @@ func (l *list[T]) MoveDown(n int) tea.Cmd {
 		l.decrementOffset(n)
 	}
 
+	// Re-render after scrolling
+	if oldOffset != l.offset {
+		l.renderMu.Lock()
+		l.rendered = l.renderVirtualScrolling()
+		l.renderMu.Unlock()
+	}
+
 	if oldOffset == l.offset {
 		// Even if offset didn't change, we might need to change selection
 		// if we're at the edge of the scrollable area
@@ -1263,6 +1270,13 @@ func (l *list[T]) MoveUp(n int) tea.Cmd {
 		l.decrementOffset(n)
 	} else {
 		l.incrementOffset(n)
+	}
+
+	// Re-render after scrolling
+	if oldOffset != l.offset {
+		l.renderMu.Lock()
+		l.rendered = l.renderVirtualScrolling()
+		l.renderMu.Unlock()
 	}
 
 	if oldOffset == l.offset {
