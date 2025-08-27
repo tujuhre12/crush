@@ -29,16 +29,16 @@ var (
 	ErrSessionBusy      = errors.New("session is currently processing another request")
 )
 
-type AgentEventType string
+type EventType string
 
 const (
-	AgentEventTypeError     AgentEventType = "error"
-	AgentEventTypeResponse  AgentEventType = "response"
-	AgentEventTypeSummarize AgentEventType = "summarize"
+	EventTypeError     EventType = "error"
+	EventTypeResponse  EventType = "response"
+	EventTypeSummarize EventType = "summarize"
 )
 
-type AgentEvent struct {
-	Type   AgentEventType
+type Event struct {
+	Type   EventType
 	Result ai.AgentResult
 	Error  error
 
@@ -49,9 +49,9 @@ type AgentEvent struct {
 }
 
 type Service interface {
-	pubsub.Suscriber[AgentEvent]
+	pubsub.Suscriber[Event]
 	Model() catwalk.Model
-	Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan AgentEvent, error)
+	Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan Event, error)
 	Cancel(sessionID string)
 	CancelAll()
 	IsSessionBusy(sessionID string) bool
@@ -63,7 +63,7 @@ type Service interface {
 }
 
 type agent struct {
-	*pubsub.Broker[AgentEvent]
+	*pubsub.Broker[Event]
 	cfg            *config.Config
 	permissions    permission.Service
 	sessions       session.Service
@@ -88,7 +88,7 @@ func NewAgent(
 ) Service {
 	return &agent{
 		cfg:            cfg,
-		Broker:         pubsub.NewBroker[AgentEvent](),
+		Broker:         pubsub.NewBroker[Event](),
 		permissions:    permissions,
 		sessions:       sessions,
 		messages:       messages,
@@ -170,7 +170,7 @@ func (a *agent) tools(ctx context.Context) []ai.AgentTool {
 }
 
 // Run implements Service.
-func (a *agent) Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan AgentEvent, error) {
+func (a *agent) Run(ctx context.Context, sessionID string, content string, attachments ...message.Attachment) (<-chan Event, error) {
 	// INFO: for now we assume that the agent uses the large model
 	configModel := a.cfg.Models[config.SelectedModelTypeLarge]
 	model, err := a.getLanguageModel(configModel.Provider, configModel.Model)
@@ -197,7 +197,7 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		ai.WithMaxOutputTokens(maxTokens),
 	)
 
-	events := make(chan AgentEvent, 1)
+	events := make(chan Event, 1)
 	if a.IsSessionBusy(sessionID) {
 		existing, ok := a.promptQueue.Get(sessionID)
 		if !ok {
@@ -219,13 +219,13 @@ func (a *agent) Run(ctx context.Context, sessionID string, content string, attac
 		cancel()
 		if err != nil {
 			slog.Error(err.Error())
-			events <- AgentEvent{
-				Type:  AgentEventTypeError,
+			events <- Event{
+				Type:  EventTypeError,
 				Error: err,
 			}
 		} else {
-			result := AgentEvent{
-				Type:   AgentEventTypeResponse,
+			result := Event{
+				Type:   EventTypeResponse,
 				Result: *result,
 			}
 			a.Publish(pubsub.CreatedEvent, result)
