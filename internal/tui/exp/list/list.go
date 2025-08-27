@@ -1,7 +1,6 @@
 package list
 
 import (
-	"log"
 	"slices"
 	"strings"
 	"sync"
@@ -577,8 +576,6 @@ func (l *list[T]) viewPosition() (int, int) {
 			start = 0
 		}
 	}
-	log.Printf("[viewPosition] direction=%v, offset=%d, height=%d, virtualHeight=%d -> start=%d, end=%d",
-		l.direction, l.offset, l.height, l.virtualHeight, start, end)
 	return start, end
 }
 
@@ -954,13 +951,10 @@ func (l *list[T]) renderVirtualScrolling() string {
 
 	// Calculate viewport bounds
 	viewStart, viewEnd := l.viewPosition()
-	log.Printf("[renderVirtualScrolling] START: viewStart=%d, viewEnd=%d, offset=%d, height=%d, virtualHeight=%d, direction=%v, selectedIndex=%d",
-		viewStart, viewEnd, l.offset, l.height, l.virtualHeight, l.direction, l.selectedIndex)
 
 	// Check if we have any positions calculated
 	if len(l.itemPositions) == 0 {
 		// No positions calculated yet, return empty viewport
-		log.Printf("[renderVirtualScrolling] No item positions calculated yet")
 		return ""
 	}
 
@@ -972,10 +966,8 @@ func (l *list[T]) renderVirtualScrolling() string {
 	}
 
 	itemsLen := l.items.Len()
-	log.Printf("[renderVirtualScrolling] Checking %d items for visibility", itemsLen)
 	for i := 0; i < itemsLen; i++ {
 		if i >= len(l.itemPositions) {
-			log.Printf("[renderVirtualScrolling] Skipping item %d: no position data", i)
 			continue
 		}
 
@@ -985,30 +977,24 @@ func (l *list[T]) renderVirtualScrolling() string {
 		if pos.end >= viewStart && pos.start <= viewEnd {
 			item, ok := l.items.Get(i)
 			if !ok {
-				log.Printf("[renderVirtualScrolling] Item %d not found in items slice", i)
 				continue
 			}
-			log.Printf("[renderVirtualScrolling] Item %d (id=%s) is visible: pos.start=%d, pos.end=%d, height=%d",
-				i, item.ID(), pos.start, pos.end, pos.height)
 			visibleItems = append(visibleItems, struct {
 				item  T
 				pos   itemPosition
 				index int
 			}{item, pos, i})
 		} else {
-			log.Printf("[renderVirtualScrolling] Item %d not visible: pos.start=%d, pos.end=%d (viewport: %d-%d)",
-				i, pos.start, pos.end, viewStart, viewEnd)
+			// Item is not visible
 		}
 
 		// Early exit if we've passed the viewport
 		if pos.start > viewEnd {
-			log.Printf("[renderVirtualScrolling] Early exit at item %d: pos.start=%d > viewEnd=%d", i, pos.start, viewEnd)
 			break
 		}
 	}
 
 	// Build the rendered output
-	log.Printf("[renderVirtualScrolling] Found %d visible items", len(visibleItems))
 	var lines []string
 	currentLine := viewStart
 
@@ -1017,20 +1003,16 @@ func (l *list[T]) renderVirtualScrolling() string {
 		var view string
 		if cached, ok := l.viewCache.Get(vis.item.ID()); ok {
 			view = cached
-			log.Printf("[renderVirtualScrolling] Using cached view for item %d (id=%s)", vis.index, vis.item.ID())
 		} else {
 			view = vis.item.View()
 			l.viewCache.Set(vis.item.ID(), view)
-			log.Printf("[renderVirtualScrolling] Rendered new view for item %d (id=%s)", vis.index, vis.item.ID())
 		}
 
 		itemLines := strings.Split(view, "\n")
-		log.Printf("[renderVirtualScrolling] Item %d has %d lines, currentLine=%d", vis.index, len(itemLines), currentLine)
 
 		// Add gap lines before item if needed (except for first visible item)
 		if idx > 0 && currentLine < vis.pos.start {
 			gapLines := vis.pos.start - currentLine
-			log.Printf("[renderVirtualScrolling] Adding %d gap lines before item %d", gapLines, vis.index)
 			for i := 0; i < gapLines; i++ {
 				lines = append(lines, "")
 			}
@@ -1042,7 +1024,6 @@ func (l *list[T]) renderVirtualScrolling() string {
 		if vis.pos.start < viewStart {
 			// Item starts before viewport, skip some lines
 			startLine = viewStart - vis.pos.start
-			log.Printf("[renderVirtualScrolling] Item %d starts before viewport, skipping %d lines", vis.index, startLine)
 		}
 
 		// Add the item's visible lines
@@ -1061,15 +1042,10 @@ func (l *list[T]) renderVirtualScrolling() string {
 			// Normal case: we're at the item's start position + lines added
 			currentLine = vis.pos.start + linesAdded
 		}
-		
-		log.Printf("[renderVirtualScrolling] Added %d lines from item %d (visible item #%d), currentLine now=%d",
-			linesAdded, vis.index, idx, currentLine)
 	}
 
 	// For content that fits entirely in viewport, don't pad with empty lines
 	// Only pad if we have scrolled or if content is larger than viewport
-	log.Printf("[renderVirtualScrolling] Before padding: %d lines, virtualHeight=%d, height=%d, offset=%d",
-		len(lines), l.virtualHeight, l.height, l.offset)
 	
 	if l.virtualHeight > l.height || l.offset > 0 {
 		// Fill remaining viewport with empty lines if needed
@@ -1078,23 +1054,19 @@ func (l *list[T]) renderVirtualScrolling() string {
 			lines = append(lines, "")
 		}
 		if len(lines) > initialLen {
-			log.Printf("[renderVirtualScrolling] Added %d padding lines", len(lines)-initialLen)
+			// Added padding lines
 		}
 
 		// Trim to viewport height
 		if len(lines) > l.height {
-			log.Printf("[renderVirtualScrolling] Trimming from %d to %d lines", len(lines), l.height)
 			lines = lines[:l.height]
 		}
 	}
 
 	result := strings.Join(lines, "\n")
 	resultHeight := lipgloss.Height(result)
-	log.Printf("[renderVirtualScrolling] FINAL: Returning %d lines (height=%d), expected viewport height=%d",
-		len(lines), resultHeight, l.height)
 	if resultHeight < l.height && len(visibleItems) > 0 {
-		log.Printf("[renderVirtualScrolling] WARNING: Rendered fewer lines than viewport! Missing %d lines",
-			l.height-resultHeight)
+		// Warning: rendered fewer lines than viewport
 	}
 	return result
 }
